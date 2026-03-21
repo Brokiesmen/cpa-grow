@@ -1,10 +1,12 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
 import websocket from '@fastify/websocket'
 import { prisma } from './lib/prisma.js'
 import { redis } from './lib/redis.js'
+import { errorHandler } from './lib/errors.js'
 
 // Routes
 import authRoutes from './routes/auth.js'
@@ -29,6 +31,10 @@ await fastify.register(cors, {
   credentials: true
 })
 
+await fastify.register(cookie, {
+  secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'cookie-secret'
+})
+
 await fastify.register(jwt, {
   secret: process.env.JWT_SECRET || 'dev-secret-change-in-prod'
 })
@@ -44,20 +50,34 @@ await fastify.register(websocket)
 fastify.decorate('prisma', prisma)
 fastify.decorate('redis', redis)
 
+// Оставляем для обратной совместимости — делегируют в middleware/auth.js
 fastify.decorate('authenticate', async (request, reply) => {
   try {
     await request.jwtVerify()
   } catch {
-    reply.code(401).send({ error: 'UNAUTHORIZED' })
+    reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Authentication required' })
   }
 })
 
 fastify.decorate('requireRole', (roles) => async (request, reply) => {
-  await fastify.authenticate(request, reply)
-  if (!roles.includes(request.user.role)) {
-    reply.code(403).send({ error: 'FORBIDDEN' })
+  try {
+    await request.jwtVerify()
+  } catch {
+    return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Authentication required' })
+  }
+  const roleArr = Array.isArray(roles) ? roles : [roles]
+  if (!roleArr.includes(request.user.role)) {
+    reply.code(403).send({ error: 'FORBIDDEN', message: 'Access denied' })
   }
 })
+
+// Добавляем requestId в каждый лог
+fastify.addHook('onRequest', async (req) => {
+  req.log = req.log.child({ requestId: req.id })
+})
+
+// Global error handler
+fastify.setErrorHandler(errorHandler)
 
 // Routes
 await fastify.register(authRoutes, { prefix: '/api/auth' })
@@ -69,7 +89,24 @@ await fastify.register(trackerRoutes, { prefix: '/go' })
 await fastify.register(websocketRoutes)
 
 // Health check
-fastify.get('/health', async () => ({ status: 'ok', ts: new Date().toISOString() }))
+fastify.get('/health', async (req, reply) => {
+  const checks = await Promise.allSettled([
+    prisma.$queryRaw`SELECT 1`,
+    redis.ping()
+  ])
+
+  const db = checks[0].status === 'fulfilled' ? 'ok' : 'error'
+  const redisStatus = checks[1].status === 'fulfilled' && checks[1].value === 'PONG' ? 'ok' : 'error'
+  const healthy = db === 'ok' && redisStatus === 'ok'
+
+  return reply.code(healthy ? 200 : 503).send({
+    status: healthy ? 'ok' : 'degraded',
+    db,
+    redis: redisStatus,
+    uptime: Math.floor(process.uptime()),
+    ts: new Date().toISOString()
+  })
+})
 
 // Graceful shutdown
 const signals = ['SIGTERM', 'SIGINT']

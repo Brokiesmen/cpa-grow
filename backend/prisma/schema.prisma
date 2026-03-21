@@ -322,6 +322,8 @@ model Click {
   @@index([publisherId])
   @@index([offerId])
   @@index([fingerprint])
+  @@index([fraudScore])
+  @@index([offerId, createdAt])
   @@index([createdAt])
 }
 
@@ -356,6 +358,8 @@ model Conversion {
   @@index([offerId])
   @@index([status])
   @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([publisherId, status])
 }
 
 // ─────────────────────────────────────────────
@@ -453,6 +457,7 @@ model Dispute {
   @@index([publisherId])
   @@index([advertiserId])
   @@index([status])
+  @@index([publisherId, status])
 }
 
 model DisputeMessage {
@@ -617,4 +622,23 @@ model PostbackLog {
 
   @@index([clickId])
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  action    String   // RESOLVE_DISPUTE, APPROVE_PAYOUT, BAN_USER, ...
+  entityId  String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action, createdAt])
+  @@index([entityId])
 }

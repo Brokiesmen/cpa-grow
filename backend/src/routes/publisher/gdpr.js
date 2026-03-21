@@ -98,7 +98,8 @@ export default async function gdprRoutes(fastify) {
 
   // Export personal data (GDPR Article 20 - Data Portability)
   fastify.get('/account/export-data', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 1, timeWindow: '24h' } }
   }, async (req, reply) => {
     const userId = req.user.id
     const publisher = await prisma.publisher.findFirst({ where: { userId } })

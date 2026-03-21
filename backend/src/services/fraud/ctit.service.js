@@ -3,6 +3,8 @@
  * Detect fraud based on suspicious timing between click and conversion
  */
 
+import { FRAUD_SCORE_AUTO_REJECT } from '../../lib/constants.js'
+
 const CTIT_RULES = {
   GAMBLING_REGISTRATION: {
     minSeconds: 10,

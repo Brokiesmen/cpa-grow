@@ -3,6 +3,7 @@
  */
 
 import { openDispute, addMessage, getDisputeWithContext } from '../../services/dispute.service.js'
+import { disputeListSelect } from '../../lib/dispute.queries.js'
 
 export default async function disputeRoutes(fastify) {
   const { prisma } = fastify
@@ -54,10 +55,7 @@ export default async function disputeRoutes(fastify) {
         orderBy: { createdAt: 'desc' },
         skip,
         take: parseInt(limit),
-        include: {
-          conversion: { select: { id: true, payout: true, currency: true, goal: true } },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1 }
-        }
+        select: disputeListSelect
       }),
       prisma.dispute.count({ where: { publisherId: publisher.id, ...(status ? { status } : {}) } })
     ])

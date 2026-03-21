@@ -4,8 +4,7 @@
  */
 
 import { prisma } from '../lib/prisma.js'
-
-const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'USDT']
+import { SUPPORTED_CURRENCIES, MIN_PAYOUT } from '../lib/constants.js'
 
 /**
  * Get all balances for a publisher
@@ -15,7 +14,6 @@ export async function getPublisherBalances(publisherId) {
     where: { publisherId }
   })
 
-  // Return map with zeros for missing currencies
   return SUPPORTED_CURRENCIES.map(currency => {
     const found = balances.find(b => b.currency === currency)
     return {
@@ -29,12 +27,9 @@ export async function getPublisherBalances(publisherId) {
 
 /**
  * Credit publisher balance (on conversion approval)
- * @param {object} params
  */
 export async function creditPublisher({ publisherId, amount, currency = 'USD', type, refId, description }) {
-  if (!SUPPORTED_CURRENCIES.includes(currency)) {
-    currency = 'USD' // fallback
-  }
+  if (!SUPPORTED_CURRENCIES.includes(currency)) currency = 'USD'
 
   await prisma.$transaction([
     prisma.publisherBalance.upsert({
@@ -50,9 +45,9 @@ export async function creditPublisher({ publisherId, amount, currency = 'USD', t
 
 /**
  * Move funds to hold (when conversion enters PENDING)
+ * Атомарно: нельзя уйти в минус по hold
  */
 export async function holdFunds({ publisherId, amount, currency = 'USD' }) {
-  // hold doesn't reduce available until approval — just tracks reserved amount
   await prisma.publisherBalance.upsert({
     where: { publisherId_currency: { publisherId, currency } },
     update: { hold: { increment: amount } },
@@ -62,17 +57,30 @@ export async function holdFunds({ publisherId, amount, currency = 'USD' }) {
 
 /**
  * Release hold and credit available (conversion APPROVED)
+ * Атомарно проверяем что hold >= amount перед release
  */
 export async function releaseHoldToAvailable({ publisherId, amount, currency = 'USD', refId }) {
-  await prisma.$transaction([
-    prisma.publisherBalance.update({
+  await prisma.$transaction(async (tx) => {
+    const balance = await tx.publisherBalance.findUnique({
+      where: { publisherId_currency: { publisherId, currency } }
+    })
+
+    if (!balance || +balance.hold < amount) {
+      throw Object.assign(
+        new Error(`Hold balance insufficient. Hold: ${balance ? +balance.hold : 0}, requested: ${amount}`),
+        { code: 'INSUFFICIENT_HOLD' }
+      )
+    }
+
+    await tx.publisherBalance.update({
       where: { publisherId_currency: { publisherId, currency } },
       data: {
         hold: { decrement: amount },
         available: { increment: amount }
       }
-    }),
-    prisma.publisherTransaction.create({
+    })
+
+    await tx.publisherTransaction.create({
       data: {
         publisherId,
         type: 'CONVERSION',
@@ -82,27 +90,32 @@ export async function releaseHoldToAvailable({ publisherId, amount, currency = '
         refId
       }
     })
-  ])
+  })
 }
 
 /**
  * Debit for payout
+ * Атомарно проверяем available >= amount внутри транзакции
  */
 export async function debitForPayout({ publisherId, amount, currency, payoutId }) {
-  const balance = await prisma.publisherBalance.findUnique({
-    where: { publisherId_currency: { publisherId, currency } }
-  })
+  await prisma.$transaction(async (tx) => {
+    const balance = await tx.publisherBalance.findUnique({
+      where: { publisherId_currency: { publisherId, currency } }
+    })
 
-  if (!balance || +balance.available < amount) {
-    throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' })
-  }
+    if (!balance || +balance.available < amount) {
+      throw Object.assign(
+        new Error(`Insufficient balance. Available: ${balance ? +balance.available : 0}`),
+        { code: 'INSUFFICIENT_BALANCE' }
+      )
+    }
 
-  await prisma.$transaction([
-    prisma.publisherBalance.update({
+    await tx.publisherBalance.update({
       where: { publisherId_currency: { publisherId, currency } },
       data: { available: { decrement: amount } }
-    }),
-    prisma.publisherTransaction.create({
+    })
+
+    await tx.publisherTransaction.create({
       data: {
         publisherId,
         type: 'PAYOUT',
@@ -112,11 +125,11 @@ export async function debitForPayout({ publisherId, amount, currency, payoutId }
         refId: payoutId
       }
     })
-  ])
+  })
 }
 
 /**
- * Validate payout request
+ * Validate payout request (read-only check перед debit)
  */
 export async function validatePayoutRequest({ publisherId, amount, currency }) {
   const balance = await prisma.publisherBalance.findUnique({
@@ -130,17 +143,17 @@ export async function validatePayoutRequest({ publisherId, amount, currency }) {
     )
   }
 
-  if (amount < getMinPayout(currency)) {
+  const min = getMinPayout(currency)
+  if (amount < min) {
     throw Object.assign(
-      new Error(`Minimum payout for ${currency} is ${getMinPayout(currency)}`),
+      new Error(`Minimum payout for ${currency} is ${min}`),
       { code: 'BELOW_MINIMUM' }
     )
   }
 }
 
-function getMinPayout(currency) {
-  const minimums = { USD: 50, EUR: 50, USDT: 50 }
-  return minimums[currency] ?? 50
+export function getMinPayout(currency) {
+  return MIN_PAYOUT[currency] ?? MIN_PAYOUT.DEFAULT
 }
 
 /**
@@ -161,10 +174,7 @@ export async function getTransactionHistory({ publisherId, currency, page = 1, l
   ])
 
   return {
-    data: transactions.map(t => ({
-      ...t,
-      amount: +t.amount
-    })),
+    data: transactions.map(t => ({ ...t, amount: +t.amount })),
     meta: { total, page, per_page: limit }
   }
 }

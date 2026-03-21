@@ -3,6 +3,8 @@
  */
 
 import { adminResolve, getDisputeWithContext } from '../../services/dispute.service.js'
+import { disputeListSelect } from '../../lib/dispute.queries.js'
+import { auditLog } from '../../lib/audit.js'
 
 export default async function adminDisputeRoutes(fastify) {
   const { prisma } = fastify
@@ -20,10 +22,7 @@ export default async function adminDisputeRoutes(fastify) {
         orderBy: { createdAt: 'desc' },
         skip,
         take: parseInt(limit),
-        include: {
-          conversion: { select: { id: true, payout: true, currency: true, goal: true } },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1 }
-        }
+        select: disputeListSelect
       }),
       prisma.dispute.count({ where })
     ])
@@ -58,6 +57,13 @@ export default async function adminDisputeRoutes(fastify) {
         adminId: req.user.id,
         decision: req.body.decision,
         note: req.body.note
+      })
+      await auditLog({
+        adminId: req.user.id,
+        action: 'RESOLVE_DISPUTE',
+        entityId: req.params.id,
+        after: { decision: req.body.decision, note: req.body.note },
+        ip: req.ip
       })
       return { success: true }
     } catch (err) {

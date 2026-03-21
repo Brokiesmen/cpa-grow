@@ -48,12 +48,23 @@ export default async function trackerRoutes(fastify) {
       return reply.redirect(process.env.FALLBACK_URL || '/')
     }
 
-    // Cap check
+    // Cap checks
+    const fallback = process.env.FALLBACK_URL || '/'
     if (offer.dailyCap) {
-      const todayCount = await getDailyConversionCount(offer.id)
-      if (todayCount >= offer.dailyCap) {
-        return reply.redirect(process.env.FALLBACK_URL || '/')
-      }
+      const count = await getConversionCount(offer.id, 'day')
+      if (count >= offer.dailyCap) return reply.redirect(fallback)
+    }
+    if (offer.weeklyCap) {
+      const count = await getConversionCount(offer.id, 'week')
+      if (count >= offer.weeklyCap) return reply.redirect(fallback)
+    }
+    if (offer.monthlyCap) {
+      const count = await getConversionCount(offer.id, 'month')
+      if (count >= offer.monthlyCap) return reply.redirect(fallback)
+    }
+    if (offer.totalCap) {
+      const count = await getConversionCount(offer.id, 'total')
+      if (count >= offer.totalCap) return reply.redirect(fallback)
     }
 
     // Geo check (basic — extend with GeoIP library)
@@ -229,16 +240,28 @@ export default async function trackerRoutes(fastify) {
 
 // ─── HELPERS ─────────────────────────────────────────────────────
 
-async function getDailyConversionCount(offerId) {
-  const count = await prisma.conversion.count({
+async function getConversionCount(offerId, period) {
+  const now = new Date()
+  let gte
+
+  if (period === 'day') {
+    gte = new Date(now.setHours(0, 0, 0, 0))
+  } else if (period === 'week') {
+    const day = now.getDay()
+    gte = new Date(now.setDate(now.getDate() - day))
+    gte.setHours(0, 0, 0, 0)
+  } else if (period === 'month') {
+    gte = new Date(now.getFullYear(), now.getMonth(), 1)
+  }
+
+  return prisma.conversion.count({
     where: {
       offerId,
-      createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      ...(gte ? { createdAt: { gte } } : {}),
       status: { in: ['PENDING', 'APPROVED'] },
       isSandbox: false
     }
   })
-  return count
 }
 
 async function logPostback({ clickId, offerId, raw, ip, status, error }, prisma) {

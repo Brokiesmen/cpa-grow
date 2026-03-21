@@ -8,8 +8,7 @@ export default async function offersApiV1(fastify) {
 
   // API key auth decorator
   async function apiKeyAuth(req, reply) {
-    const apiKey = req.headers['authorization']?.replace('Bearer ', '') ||
-      req.query.api_key
+    const apiKey = req.headers['authorization']?.replace('Bearer ', '')
 
     if (!apiKey) return reply.code(401).send({ error: 'API_KEY_REQUIRED' })
 

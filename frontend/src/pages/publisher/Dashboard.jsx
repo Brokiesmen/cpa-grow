@@ -6,41 +6,30 @@ import {
 } from 'recharts'
 import api from '../../api/client'
 import StatCard from '../../components/StatCard'
-import Badge from '../../components/Badge'
 
 const fmt = n => n == null ? '—' : Number(n).toLocaleString()
 const fmtUSD = n => n == null ? '—' : '$' + Number(n).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = s => new Date(s).toLocaleDateString('en', { month: 'short', day: 'numeric' })
 
-// Generate mock chart data when API has no data yet
-function mockChartData() {
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (13 - i))
-    const clicks = Math.round(80 + Math.random() * 120)
-    const conversions = Math.round(clicks * (0.02 + Math.random() * 0.04))
-    return {
-      date: fmtDate(d),
-      clicks,
-      conversions,
-      revenue: +(conversions * (120 + Math.random() * 60)).toFixed(2)
-    }
-  })
+function EmptyChart() {
+  return (
+    <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+      No data yet — start driving traffic to see stats here
+    </div>
+  )
 }
 
 export default function PublisherDashboard() {
   const [stats, setStats] = useState(null)
   const [chart, setChart] = useState([])
-  const [conversions, setConversions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    const apiKey = JSON.parse(localStorage.getItem('user') || '{}')?.profile?.apiKey
-
     Promise.all([
-      api.get('/v1/stats').catch(() => ({ data: [] })),
-      api.get('/v1/balance').catch(() => ({ data: [] })),
-      api.get('/publisher/disputes').catch(() => ({ data: { data: [] } })),
+      api.get('/v1/stats'),
+      api.get('/v1/balance'),
+      api.get('/publisher/disputes'),
     ]).then(([statsRes, balRes, dispRes]) => {
       const rows = statsRes.data || []
 
@@ -59,12 +48,20 @@ export default function PublisherDashboard() {
 
       const chartData = rows.length > 0
         ? rows.slice(-14).map(r => ({ date: fmtDate(r.date), clicks: r.clicks, conversions: r.conversions, revenue: r.revenue }))
-        : mockChartData()
+        : []
       setChart(chartData)
+    }).catch(err => {
+      setError(err.response?.data?.message || 'Failed to load dashboard data')
     }).finally(() => setLoading(false))
   }, [])
 
   if (loading) return <div className="loading-page"><div className="spinner" /><span>Loading...</span></div>
+
+  if (error) return (
+    <div className="card" style={{ color: 'var(--red)', padding: 24 }}>
+      {error}
+    </div>
+  )
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
@@ -89,7 +86,6 @@ export default function PublisherDashboard() {
         <div className="page-subtitle">Last 30 days performance</div>
       </div>
 
-      {/* Stat Cards */}
       <div className="grid-4">
         <StatCard label="Total Revenue" value={fmtUSD(stats?.revenue)} sub="last 30d" color="green" icon="$" />
         <StatCard label="Clicks" value={fmt(stats?.clicks)} sub="total" color="blue" icon="↗" />
@@ -97,57 +93,61 @@ export default function PublisherDashboard() {
         <StatCard label="Balance (USD)" value={fmtUSD(stats?.balance)} sub="available" color="green" icon="◎" />
       </div>
 
-      {/* Charts */}
       <div className="grid-2 mt-6">
         <div className="card">
           <div className="card-header">Revenue (14 days)</div>
           <div className="card-body">
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chart}>
-                <defs>
-                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="revenue" stroke="var(--accent)" strokeWidth={2} fill="url(#rev)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {chart.length === 0 ? <EmptyChart /> : (
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={chart}>
+                  <defs>
+                    <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="revenue" stroke="var(--accent)" strokeWidth={2} fill="url(#rev)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         <div className="card">
           <div className="card-header">Clicks vs Conversions</div>
           <div className="card-body">
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="clicks" stroke="var(--accent)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="conversions" stroke="var(--green)" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-            <div className="flex gap-4 mt-4" style={{ fontSize: 12, color: 'var(--text-2)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 12, height: 2, background: 'var(--accent)', display: 'inline-block', borderRadius: 2 }} />
-                Clicks
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 12, height: 2, background: 'var(--green)', display: 'inline-block', borderRadius: 2 }} />
-                Conversions
-              </span>
-            </div>
+            {chart.length === 0 ? <EmptyChart /> : (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={chart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="clicks" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="conversions" stroke="var(--green)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="flex gap-4 mt-4" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 12, height: 2, background: 'var(--accent)', display: 'inline-block', borderRadius: 2 }} />
+                    Clicks
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 12, height: 2, background: 'var(--green)', display: 'inline-block', borderRadius: 2 }} />
+                    Conversions
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Quick actions */}
       <div className="mt-6 flex gap-3">
         <Link to="/publisher/offers" className="btn btn-primary">Browse Offers</Link>
         <Link to="/publisher/balance" className="btn btn-secondary">Request Payout</Link>

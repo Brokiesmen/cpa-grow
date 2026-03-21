@@ -8,6 +8,9 @@ import { Queue, Worker } from 'bullmq'
 import { prisma } from '../lib/prisma.js'
 import { redis } from '../lib/redis.js'
 import { notifyPublisher } from '../services/notification.service.js'
+import { logger } from '../lib/logger.js'
+
+const log = logger.child({ worker: 'system' })
 
 const QUEUE_NAME = 'system-tasks'
 
@@ -164,7 +167,7 @@ async function runTQSUpdate() {
       await calculateTrafficQualityScore(id)
       updated++
     } catch (err) {
-      console.error(`[SystemWorker] TQS failed for ${id}:`, err.message)
+      log.error({ publisherId: id, err: err.message }, 'TQS calculation failed')
     }
   }
 
@@ -220,11 +223,11 @@ export function startSystemWorker() {
   )
 
   worker.on('completed', (job, result) => {
-    console.log(`[SystemWorker] ${job.name} completed:`, result)
+    log.info({ job: job.name, result }, 'Job completed')
   })
 
   worker.on('failed', (job, err) => {
-    console.error(`[SystemWorker] ${job.name} failed:`, err.message)
+    log.error({ job: job.name, err: err.message }, 'Job failed')
   })
 
   return worker

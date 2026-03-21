@@ -8,6 +8,9 @@ import { Queue, Worker } from 'bullmq'
 import { prisma } from '../lib/prisma.js'
 import { redis } from '../lib/redis.js'
 import { notifyAdmin } from '../services/notification.service.js'
+import { logger } from '../lib/logger.js'
+
+const log = logger.child({ worker: 'fraud' })
 
 const QUEUE_NAME = 'fraud-detection'
 
@@ -251,7 +254,7 @@ async function runAnomalyDetection() {
           alertCount++
         }
       } catch (err) {
-        console.error(`[FraudWorker] Rule ${rule.name} failed for ${publisherId}/${offerId}:`, err.message)
+        log.error({ rule, publisherId, offerId }, `Rule ${rule.name} failed for ${publisherId}/${offerId}:`, err.message)
       }
     }
   }
@@ -278,11 +281,11 @@ export function startFraudWorker() {
   )
 
   worker.on('completed', (job, result) => {
-    console.log(`[FraudWorker] Completed: checked=${result?.checked}, alerts=${result?.alerts}`)
+    log.info({ result }, `FraudWorker completed: checked=${result?.checked}, alerts=${result?.alerts}`)
   })
 
   worker.on('failed', (job, err) => {
-    console.error(`[FraudWorker] Failed:`, err.message)
+    log.error({ err: err.message }, `FraudWorker failed:`, err.message)
   })
 
   return worker

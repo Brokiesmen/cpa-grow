@@ -5,9 +5,7 @@
 
 import { prisma } from '../lib/prisma.js'
 import { notifyPublisher, notifyAdvertiser, notifyAdmin } from './notification.service.js'
-
-const ADVERTISER_REPLY_HOURS = 72
-const PUBLISHER_DISPUTE_WINDOW_DAYS = 7
+import { ADVERTISER_REPLY_HOURS, PUBLISHER_DISPUTE_WINDOW_DAYS } from '../lib/constants.js'
 
 /**
  * Open a dispute for a rejected conversion
