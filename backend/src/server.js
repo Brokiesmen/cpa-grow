@@ -10,6 +10,7 @@ import { errorHandler } from './lib/errors.js'
 
 // Routes
 import authRoutes from './routes/auth.js'
+import oauthRoutes from './routes/auth.oauth.js'
 import publisherRoutes from './routes/publisher/index.js'
 import advertiserRoutes from './routes/advertiser/index.js'
 import adminRoutes from './routes/admin/index.js'
@@ -81,6 +82,7 @@ fastify.setErrorHandler(errorHandler)
 
 // Routes
 await fastify.register(authRoutes, { prefix: '/api/auth' })
+await fastify.register(oauthRoutes, { prefix: '/api/auth' })
 await fastify.register(publisherRoutes, { prefix: '/api/publisher' })
 await fastify.register(advertiserRoutes, { prefix: '/api/advertiser' })
 await fastify.register(adminRoutes, { prefix: '/api/admin' })

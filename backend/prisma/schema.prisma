@@ -107,13 +107,16 @@ enum DisputeStatus {
 // ─────────────────────────────────────────────
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  passwordHash String
-  role         UserRole
-  status       UserStatus @default(PENDING)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            String     @id @default(uuid())
+  email         String?    @unique
+  passwordHash  String?
+  role          UserRole
+  status        UserStatus @default(PENDING)
+  googleId      String?    @unique
+  telegramId    String?    @unique
+  walletAddress String?    @unique
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   publisher    Publisher?
   advertiser   Advertiser?
@@ -121,6 +124,7 @@ model User {
   agreementAcceptances AgreementAcceptance[]
 
   @@index([email])
+  @@index([walletAddress])
 }
 
 model Session {
