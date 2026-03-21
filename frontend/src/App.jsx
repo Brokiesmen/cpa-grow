@@ -1,3 +1,4 @@
+import { Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './components/Toast'
@@ -20,6 +21,26 @@ import AdvertiserDashboard from './pages/advertiser/Dashboard'
 import AdvertiserDisputes from './pages/advertiser/Disputes'
 import AdvertiserSandbox from './pages/advertiser/Sandbox'
 
+class ErrorBoundary extends Component {
+  state = { error: null }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
+        <h2 style={{ color: '#dc2626' }}>Something went wrong</h2>
+        <pre style={{ marginTop: 12, fontSize: 12, color: '#6b7280', whiteSpace: 'pre-wrap' }}>
+          {this.state.error.message}
+        </pre>
+        <button onClick={() => window.location.reload()}
+          style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }}>
+          Reload
+        </button>
+      </div>
+    )
+    return this.props.children
+  }
+}
+
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-page"><div className="spinner" /></div>
@@ -39,31 +60,33 @@ function Root() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <Routes>
-            <Route path="/" element={<Root />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/" element={<Root />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
-            {/* Publisher */}
-            <Route path="/publisher" element={<PrivateRoute role="PUBLISHER"><PublisherDashboard /></PrivateRoute>} />
-            <Route path="/publisher/offers" element={<PrivateRoute role="PUBLISHER"><PublisherOffers /></PrivateRoute>} />
-            <Route path="/publisher/conversions" element={<PrivateRoute role="PUBLISHER"><PublisherConversions /></PrivateRoute>} />
-            <Route path="/publisher/disputes" element={<PrivateRoute role="PUBLISHER"><PublisherDisputes /></PrivateRoute>} />
-            <Route path="/publisher/balance" element={<PrivateRoute role="PUBLISHER"><PublisherBalance /></PrivateRoute>} />
-            <Route path="/publisher/stats" element={<PrivateRoute role="PUBLISHER"><PublisherStats /></PrivateRoute>} />
+              {/* Publisher */}
+              <Route path="/publisher" element={<PrivateRoute role="PUBLISHER"><PublisherDashboard /></PrivateRoute>} />
+              <Route path="/publisher/offers" element={<PrivateRoute role="PUBLISHER"><PublisherOffers /></PrivateRoute>} />
+              <Route path="/publisher/conversions" element={<PrivateRoute role="PUBLISHER"><PublisherConversions /></PrivateRoute>} />
+              <Route path="/publisher/disputes" element={<PrivateRoute role="PUBLISHER"><PublisherDisputes /></PrivateRoute>} />
+              <Route path="/publisher/balance" element={<PrivateRoute role="PUBLISHER"><PublisherBalance /></PrivateRoute>} />
+              <Route path="/publisher/stats" element={<PrivateRoute role="PUBLISHER"><PublisherStats /></PrivateRoute>} />
 
-            {/* Advertiser */}
-            <Route path="/advertiser" element={<PrivateRoute role="ADVERTISER"><AdvertiserDashboard /></PrivateRoute>} />
-            <Route path="/advertiser/disputes" element={<PrivateRoute role="ADVERTISER"><AdvertiserDisputes /></PrivateRoute>} />
-            <Route path="/advertiser/sandbox" element={<PrivateRoute role="ADVERTISER"><AdvertiserSandbox /></PrivateRoute>} />
+              {/* Advertiser */}
+              <Route path="/advertiser" element={<PrivateRoute role="ADVERTISER"><AdvertiserDashboard /></PrivateRoute>} />
+              <Route path="/advertiser/disputes" element={<PrivateRoute role="ADVERTISER"><AdvertiserDisputes /></PrivateRoute>} />
+              <Route path="/advertiser/sandbox" element={<PrivateRoute role="ADVERTISER"><AdvertiserSandbox /></PrivateRoute>} />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }

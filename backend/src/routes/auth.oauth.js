@@ -3,13 +3,20 @@
  */
 
 import { randomUUID, createHash } from 'crypto'
-import { OAuth2Client } from 'google-auth-library'
 import { ethers } from 'ethers'
-
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
 function hashToken(token) {
   return createHash('sha256').update(token).digest('hex')
+}
+
+async function verifyGoogleToken(accessToken) {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  })
+  if (!res.ok) throw new Error('INVALID_GOOGLE_TOKEN')
+  const data = await res.json()
+  if (!data.sub) throw new Error('INVALID_GOOGLE_TOKEN')
+  return data // { sub, email, name, ... }
 }
 
 async function createSession(prisma, userId, ip, userAgent) {
@@ -77,17 +84,9 @@ export default async function oauthRoutes(fastify) {
     const { idToken, role = 'PUBLISHER', username } = req.body
     if (!idToken) return reply.code(400).send({ error: 'ID_TOKEN_REQUIRED' })
 
-    if (!process.env.GOOGLE_CLIENT_ID) {
-      return reply.code(503).send({ error: 'GOOGLE_AUTH_NOT_CONFIGURED' })
-    }
-
     let payload
     try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken,
-        audience: process.env.GOOGLE_CLIENT_ID
-      })
-      payload = ticket.getPayload()
+      payload = await verifyGoogleToken(idToken)
     } catch {
       return reply.code(401).send({ error: 'INVALID_GOOGLE_TOKEN' })
     }
