@@ -1,0 +1,126 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ───────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cpa_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cpa_platform
+      POSTGRES_USER: cpa_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cpa_user -d cpa_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (main) ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: cpa_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-changeme}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis Tracker (separate for click dedup/cap) ─
+  redis_tracker:
+    image: redis:7-alpine
+    container_name: cpa_redis_tracker
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 4gb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    # No persistence — can be rebuilt from PostgreSQL
+
+  # ─── ClickHouse (analytics) ───────────────────
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    container_name: cpa_clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native protocol
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_DB: cpa_analytics
+      CLICKHOUSE_USER: cpa_user
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # ─── Backend API ──────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cpa_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://cpa_user:${POSTGRES_PASSWORD:-changeme}@postgres:5432/cpa_platform
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    command: npm start
+
+  # ─── Workers ──────────────────────────────────
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cpa_workers
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://cpa_user:${POSTGRES_PASSWORD:-changeme}@postgres:5432/cpa_platform
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+    command: npm run workers
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+
+networks:
+  default:
+    name: cpa_network

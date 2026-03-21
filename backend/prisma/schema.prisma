@@ -1,0 +1,620 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  ADVERTISER
+  PUBLISHER
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  BANNED
+  SUSPENDED
+}
+
+enum OfferStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum Vertical {
+  GAMBLING
+  CRYPTO
+  NUTRA
+  FINANCE
+  DATING
+  OTHER
+}
+
+enum PaymentModel {
+  CPA
+  CPL
+  CPI
+  REVSHARE
+  HYBRID
+}
+
+enum TrafficType {
+  SEO
+  PPC
+  SOCIAL
+  EMAIL
+  PUSH
+  NATIVE
+  DISPLAY
+  ADULT
+  OTHER
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ConversionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  HOLD
+  SANDBOX
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PayoutMethod {
+  USDT_TRC20
+  USDT_ERC20
+  BTC
+  ETH
+  WIRE
+  WEBMONEY
+  CAPITALIST
+}
+
+enum DisputeStatus {
+  OPEN
+  ADVERTISER_REPLIED
+  ESCALATED
+  RESOLVED_FOR_PUBLISHER
+  RESOLVED_FOR_ADVERTISER
+  CLOSED
+}
+
+// ─────────────────────────────────────────────
+// CORE MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  role         UserRole
+  status       UserStatus @default(PENDING)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  publisher    Publisher?
+  advertiser   Advertiser?
+  sessions     Session[]
+  agreementAcceptances AgreementAcceptance[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+model Publisher {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  username            String    @unique
+  telegram            String?
+  phone               String?
+  website             String?
+  trafficTypes        TrafficType[]
+  referralCode        String    @unique @default(uuid())
+  referredById        String?
+  referralPercent     Decimal   @default(5) @db.Decimal(5, 2)
+  trafficQualityScore Int       @default(50)
+  tqsUpdatedAt        DateTime?
+  tqsDetails          Json?
+  apiKey              String    @unique @default(uuid())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user                User      @relation(fields: [userId], references: [id])
+  referredBy          Publisher? @relation("Referrals", fields: [referredById], references: [id])
+  referrals           Publisher[] @relation("Referrals")
+  applications        Application[]
+  clicks              Click[]
+  conversions         Conversion[]
+  payouts             Payout[]
+  transactions        PublisherTransaction[]
+  balances            PublisherBalance[]
+  tqsHistory          PublisherTQS[]
+  disputes            Dispute[]
+  feedSubscriptions   OfferFeedSubscription[]
+
+  @@index([username])
+  @@index([apiKey])
+}
+
+model Advertiser {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  companyName    String?
+  website        String?
+  apiKey         String   @unique @default(uuid())
+  balance        Decimal  @default(0) @db.Decimal(18, 2)
+  holdAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id])
+  offers         Offer[]
+  transactions   AdvertiserTransaction[]
+  publisherBlocks AdvertiserPublisherBlock[]
+
+  @@index([apiKey])
+}
+
+// ─────────────────────────────────────────────
+// OFFERS
+// ─────────────────────────────────────────────
+
+model Offer {
+  id              String       @id @default(uuid())
+  advertiserId    String
+  name            String
+  description     String?      @db.Text
+  vertical        Vertical
+  paymentModel    PaymentModel
+  payout          Decimal      @db.Decimal(18, 2)
+  currency        String       @default("USD")
+  allowedGeos     String[]
+  allowedTraffic  TrafficType[]
+  previewUrl      String?
+  landingUrl      String
+  cookieLifetime  Int          @default(30)
+  dailyCap        Int?
+  weeklyCap       Int?
+  monthlyCap      Int?
+  totalCap        Int?
+  status          OfferStatus  @default(DRAFT)
+  isSandbox       Boolean      @default(false)
+  postbackSecret  String       @default(uuid())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  advertiser      Advertiser   @relation(fields: [advertiserId], references: [id])
+  goals           OfferGoal[]
+  applications    Application[]
+  clicks          Click[]
+  conversions     Conversion[]
+  creatives       Creative[]
+
+  @@index([status, vertical])
+  @@index([advertiserId])
+}
+
+model OfferGoal {
+  id       String  @id @default(uuid())
+  offerId  String
+  name     String
+  payout   Decimal @db.Decimal(18, 2)
+  isDefault Boolean @default(false)
+
+  offer    Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+}
+
+model Creative {
+  id        String   @id @default(uuid())
+  offerId   String
+  name      String
+  type      String   // banner, video, text
+  url       String?
+  content   String?  @db.Text
+  size      String?
+  createdAt DateTime @default(now())
+
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// TRAFFIC
+// ─────────────────────────────────────────────
+
+model TrackingLink {
+  id          String   @id @default(uuid())
+  publisherId String
+  offerId     String
+  shortCode   String   @unique
+  subid1      String?
+  subid2      String?
+  subid3      String?
+  subid4      String?
+  subid5      String?
+  createdAt   DateTime @default(now())
+
+  @@index([shortCode])
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  publisherId String
+  offerId     String
+  status      ApplicationStatus @default(PENDING)
+  comment     String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  publisher   Publisher         @relation(fields: [publisherId], references: [id])
+  offer       Offer             @relation(fields: [offerId], references: [id])
+
+  @@unique([publisherId, offerId])
+}
+
+model Click {
+  id            String   @id @default(uuid())
+  clickId       String   @unique @default(uuid())
+  publisherId   String
+  offerId       String
+  subid1        String?
+  subid2        String?
+  subid3        String?
+  ipAddress     String?
+  ipHash        String?
+  userAgent     String?
+  referer       String?
+  country       String?
+  city          String?
+  isp           String?
+  deviceType    String?
+  os            String?
+  browser       String?
+  fingerprint   String?
+  emailHash     String?
+  isUnique      Boolean  @default(true)
+  isFraud       Boolean  @default(false)
+  fraudScore    Int      @default(0)
+  fraudReasons  String[]
+  isSandbox     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  publisher     Publisher @relation(fields: [publisherId], references: [id])
+  offer         Offer     @relation(fields: [offerId], references: [id])
+  conversion    Conversion?
+
+  @@index([clickId])
+  @@index([publisherId])
+  @@index([offerId])
+  @@index([fingerprint])
+  @@index([createdAt])
+}
+
+model Conversion {
+  id             String           @id @default(uuid())
+  clickId        String?          @unique
+  publisherId    String
+  offerId        String
+  advertiserId   String
+  goal           String           @default("default")
+  payout         Decimal          @db.Decimal(18, 2)
+  revenue        Decimal?         @db.Decimal(18, 2)
+  currency       String           @default("USD")
+  status         ConversionStatus @default(PENDING)
+  ipAddress      String?
+  country        String?
+  externalId     String?
+  isSandbox      Boolean          @default(false)
+  fraudScore     Int              @default(0)
+  ctitSeconds    Int?
+  rejectedReason String?
+  approvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  click          Click?           @relation(fields: [clickId], references: [clickId])
+  publisher      Publisher        @relation(fields: [publisherId], references: [id])
+  offer          Offer            @relation(fields: [offerId], references: [id])
+  dispute        Dispute?
+
+  @@index([publisherId])
+  @@index([offerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// FINANCE
+// ─────────────────────────────────────────────
+
+model PublisherBalance {
+  id          String   @id @default(uuid())
+  publisherId String
+  currency    String
+  available   Decimal  @default(0) @db.Decimal(18, 2)
+  hold        Decimal  @default(0) @db.Decimal(18, 2)
+  updatedAt   DateTime @updatedAt
+
+  publisher   Publisher @relation(fields: [publisherId], references: [id])
+
+  @@unique([publisherId, currency])
+}
+
+model PublisherTransaction {
+  id          String   @id @default(uuid())
+  publisherId String
+  type        String   // CONVERSION, PAYOUT, REFERRAL_BONUS, ADJUSTMENT
+  amount      Decimal  @db.Decimal(18, 2)
+  currency    String   @default("USD")
+  description String?
+  refId       String?
+  createdAt   DateTime @default(now())
+
+  publisher   Publisher @relation(fields: [publisherId], references: [id])
+
+  @@index([publisherId])
+}
+
+model Payout {
+  id          String       @id @default(uuid())
+  publisherId String
+  amount      Decimal      @db.Decimal(18, 2)
+  currency    String       @default("USD")
+  method      PayoutMethod
+  requisites  Json
+  status      PayoutStatus @default(PENDING)
+  txHash      String?
+  adminNote   String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  publisher   Publisher    @relation(fields: [publisherId], references: [id])
+
+  @@index([publisherId])
+  @@index([status])
+}
+
+model AdvertiserTransaction {
+  id           String   @id @default(uuid())
+  advertiserId String
+  type         String   // DEPOSIT, CONVERSION_CHARGE, REFUND
+  amount       Decimal  @db.Decimal(18, 2)
+  currency     String   @default("USD")
+  description  String?
+  refId        String?
+  createdAt    DateTime @default(now())
+
+  advertiser   Advertiser @relation(fields: [advertiserId], references: [id])
+
+  @@index([advertiserId])
+}
+
+// ─────────────────────────────────────────────
+// DISPUTE СИСТЕМА
+// ─────────────────────────────────────────────
+
+model Dispute {
+  id                  String        @id @default(uuid())
+  conversionId        String        @unique
+  publisherId         String
+  advertiserId        String
+  status              DisputeStatus @default(OPEN)
+  publisherReason     String        @db.Text
+  publisherEvidence   Json?
+  advertiserReply     String?       @db.Text
+  advertiserEvidence  Json?
+  adminNote           String?       @db.Text
+  resolvedById        String?
+  resolvedAt          DateTime?
+  advertiserDeadline  DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  conversion          Conversion    @relation(fields: [conversionId], references: [id])
+  publisher           Publisher     @relation(fields: [publisherId], references: [id])
+  messages            DisputeMessage[]
+
+  @@index([publisherId])
+  @@index([advertiserId])
+  @@index([status])
+}
+
+model DisputeMessage {
+  id          String   @id @default(uuid())
+  disputeId   String
+  authorId    String
+  authorRole  String   // PUBLISHER, ADVERTISER, ADMIN
+  message     String   @db.Text
+  attachments Json?
+  createdAt   DateTime @default(now())
+
+  dispute     Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+}
+
+// ─────────────────────────────────────────────
+// АНТИФРОД
+// ─────────────────────────────────────────────
+
+model FraudAlert {
+  id          String   @id @default(uuid())
+  publisherId String
+  offerId     String?
+  rule        String
+  severity    String   // LOW, MEDIUM, HIGH, CRITICAL
+  message     String
+  isResolved  Boolean  @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([publisherId])
+  @@index([isResolved])
+}
+
+model BehaviorEvent {
+  id        String   @id @default(uuid())
+  clickId   String
+  type      String   // pageview, scroll, click, form, exit, mousemove
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([clickId])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// TRAFFIC QUALITY SCORE
+// ─────────────────────────────────────────────
+
+model PublisherTQS {
+  id           String    @id @default(uuid())
+  publisherId  String
+  score        Int
+  fraudRate    Decimal   @db.Decimal(5, 4)
+  approvalRate Decimal   @db.Decimal(5, 4)
+  uniqueRate   Decimal   @db.Decimal(5, 4)
+  avgCtitSec   Int?
+  details      Json
+  period       String    // "2026-03"
+  calculatedAt DateTime  @default(now())
+
+  publisher    Publisher @relation(fields: [publisherId], references: [id])
+
+  @@index([publisherId, calculatedAt])
+}
+
+// ─────────────────────────────────────────────
+// OFFER FEED SUBSCRIPTION
+// ─────────────────────────────────────────────
+
+model OfferFeedSubscription {
+  id             String      @id @default(uuid())
+  publisherId    String
+  vertical       Vertical?
+  minPayout      Decimal?    @db.Decimal(18, 2)
+  paymentModels  String[]
+  geos           String[]
+  notifyEmail    Boolean     @default(true)
+  notifyTelegram Boolean     @default(false)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+
+  publisher      Publisher   @relation(fields: [publisherId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// БЛОКИРОВКИ РЕКЛАМОДАТЕЛЯ
+// ─────────────────────────────────────────────
+
+model AdvertiserPublisherBlock {
+  id           String     @id @default(uuid())
+  advertiserId String
+  publisherId  String
+  reason       String?
+  createdAt    DateTime   @default(now())
+
+  advertiser   Advertiser @relation(fields: [advertiserId], references: [id])
+
+  @@unique([advertiserId, publisherId])
+}
+
+// ─────────────────────────────────────────────
+// AFFILIATE AGREEMENT
+// ─────────────────────────────────────────────
+
+model AffiliateAgreement {
+  id          String   @id @default(uuid())
+  version     String
+  title       String
+  content     String   @db.Text
+  effectiveAt DateTime
+  isCurrent   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  acceptances AgreementAcceptance[]
+}
+
+model AgreementAcceptance {
+  id          String             @id @default(uuid())
+  userId      String
+  agreementId String
+  ipAddress   String?
+  acceptedAt  DateTime           @default(now())
+
+  user        User               @relation(fields: [userId], references: [id])
+  agreement   AffiliateAgreement @relation(fields: [agreementId], references: [id])
+
+  @@unique([userId, agreementId])
+}
+
+// ─────────────────────────────────────────────
+// УВЕДОМЛЕНИЯ
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+// ─────────────────────────────────────────────
+// POSTBACK ЛОГ
+// ─────────────────────────────────────────────
+
+model PostbackLog {
+  id         String   @id @default(uuid())
+  clickId    String?
+  offerId    String?
+  raw        Json
+  ip         String?
+  status     String   // PROCESSED, DUPLICATE, INVALID, FRAUD
+  errorMsg   String?
+  createdAt  DateTime @default(now())
+
+  @@index([clickId])
+  @@index([createdAt])
+}
