@@ -138,7 +138,7 @@ export default async function oauthRoutes(fastify) {
 
   // ── Telegram Mini App (initData) ──────────────
   fastify.post('/telegram-webapp', async (req, reply) => {
-    const { initData, role = 'PUBLISHER', username } = req.body
+    const { initData, role, username } = req.body
     if (!initData) return reply.code(400).send({ error: 'INIT_DATA_REQUIRED' })
 
     if (!process.env.TELEGRAM_BOT_TOKEN) {

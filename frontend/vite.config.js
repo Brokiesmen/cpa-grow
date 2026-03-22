@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        cookieDomainRewrite: { '*': '' },
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {
             proxyReq.setHeader('ngrok-skip-browser-warning', 'true')
