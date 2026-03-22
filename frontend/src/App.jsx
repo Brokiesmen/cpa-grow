@@ -52,11 +52,25 @@ class ErrorBoundary extends Component {
   }
 }
 
+function roleHome(role) {
+  if (role === 'PUBLISHER') return '/publisher'
+  if (role === 'ADVERTISER') return '/advertiser'
+  return '/admin'
+}
+
+/** Redirects to cabinet if already authenticated (used for /login, /register) */
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="loading-page"><div className="spinner" /></div>
+  if (user) return <Navigate to={roleHome(user.role)} replace />
+  return children
+}
+
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-page"><div className="spinner" /></div>
   if (!user) return <Navigate to="/login" replace />
-  if (role && user.role !== role) return <Navigate to="/" replace />
+  if (role && user.role !== role) return <Navigate to={roleHome(user.role)} replace />
   return <Layout>{children}</Layout>
 }
 
@@ -64,9 +78,7 @@ function Root() {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-page"><div className="spinner" /></div>
   if (!user) return <Navigate to="/login" replace />
-  if (user.role === 'PUBLISHER') return <Navigate to="/publisher" replace />
-  if (user.role === 'ADVERTISER') return <Navigate to="/advertiser" replace />
-  return <Navigate to="/admin" replace />
+  return <Navigate to={roleHome(user.role)} replace />
 }
 
 export default function App() {
@@ -77,8 +89,8 @@ export default function App() {
           <ToastProvider>
             <Routes>
               <Route path="/" element={<Root />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
 
               {/* Publisher */}
               <Route path="/publisher" element={<PrivateRoute role="PUBLISHER"><PublisherDashboard /></PrivateRoute>} />
