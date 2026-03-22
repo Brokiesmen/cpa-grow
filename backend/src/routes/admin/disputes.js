@@ -10,7 +10,7 @@ export default async function adminDisputeRoutes(fastify) {
   const { prisma } = fastify
 
   // List all disputes
-  fastify.get('/disputes', { onRequest: [fastify.authenticate] }, async (req, reply) => {
+  fastify.get('/disputes', { onRequest: [fastify.requireRole('ADMIN')] }, async (req, reply) => {
     const { status, page = 1, limit = 30 } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
 
@@ -31,7 +31,7 @@ export default async function adminDisputeRoutes(fastify) {
   })
 
   // Get dispute with full context
-  fastify.get('/disputes/:id', { onRequest: [fastify.authenticate] }, async (req, reply) => {
+  fastify.get('/disputes/:id', { onRequest: [fastify.requireRole('ADMIN')] }, async (req, reply) => {
     const dispute = await getDisputeWithContext(req.params.id)
     if (!dispute) return reply.code(404).send({ error: 'NOT_FOUND' })
     return dispute
@@ -39,7 +39,7 @@ export default async function adminDisputeRoutes(fastify) {
 
   // Resolve dispute
   fastify.post('/disputes/:id/resolve', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.requireRole('ADMIN')],
     schema: {
       body: {
         type: 'object',
@@ -72,7 +72,7 @@ export default async function adminDisputeRoutes(fastify) {
   })
 
   // Dispute stats for admin dashboard
-  fastify.get('/disputes/stats', { onRequest: [fastify.authenticate] }, async () => {
+  fastify.get('/disputes/stats', { onRequest: [fastify.requireRole('ADMIN')] }, async () => {
     const stats = await prisma.$queryRaw`
       SELECT
         status,
@@ -83,9 +83,9 @@ export default async function adminDisputeRoutes(fastify) {
 
     const avgResolutionTime = await prisma.$queryRaw`
       SELECT
-        AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)::float as avg_hours
+        AVG(EXTRACT(EPOCH FROM ("resolvedAt" - "createdAt")) / 3600)::float as avg_hours
       FROM disputes
-      WHERE resolved_at IS NOT NULL
+      WHERE "resolvedAt" IS NOT NULL
     `
 
     return {

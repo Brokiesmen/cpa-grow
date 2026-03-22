@@ -95,7 +95,9 @@ export default async function authRoutes(fastify) {
 
   // ── Refresh token (with rotation) ────────────
   // Accepts token from: 1) httpOnly cookie, 2) request body (for Telegram CloudStorage)
-  fastify.post('/refresh', async (req, reply) => {
+  fastify.post('/refresh', {
+    config: { rateLimit: { max: 30, timeWindow: '1m' } }
+  }, async (req, reply) => {
     const rawToken = req.cookies?.refreshToken || req.body?.refreshToken
     if (!rawToken) return reply.code(401).send({ error: 'INVALID_REFRESH_TOKEN' })
 

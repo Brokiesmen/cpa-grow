@@ -28,7 +28,8 @@ const fastify = Fastify({
 
 // Plugins
 await fastify.register(cors, {
-  origin: process.env.FRONTEND_URL || '*',
+  // In production set FRONTEND_URL. In dev, reflect requesting origin (never '*' with credentials).
+  origin: process.env.FRONTEND_URL || true,
   credentials: true
 })
 

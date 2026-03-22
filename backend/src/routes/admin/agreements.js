@@ -6,7 +6,7 @@ export default async function adminAgreementRoutes(fastify) {
   const { prisma } = fastify
 
   // List all agreement versions
-  fastify.get('/agreements', { onRequest: [fastify.authenticate] }, async () => {
+  fastify.get('/agreements', { onRequest: [fastify.requireRole('ADMIN')] }, async () => {
     return prisma.affiliateAgreement.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -17,7 +17,7 @@ export default async function adminAgreementRoutes(fastify) {
 
   // Create new agreement version
   fastify.post('/agreements', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.requireRole('ADMIN')],
     schema: {
       body: {
         type: 'object',
@@ -51,7 +51,7 @@ export default async function adminAgreementRoutes(fastify) {
   })
 
   // Set agreement as current
-  fastify.patch('/agreements/:id/set-current', { onRequest: [fastify.authenticate] }, async (req, reply) => {
+  fastify.patch('/agreements/:id/set-current', { onRequest: [fastify.requireRole('ADMIN')] }, async (req, reply) => {
     await prisma.$transaction([
       prisma.affiliateAgreement.updateMany({ where: { isCurrent: true }, data: { isCurrent: false } }),
       prisma.affiliateAgreement.update({ where: { id: req.params.id }, data: { isCurrent: true } })
@@ -61,7 +61,7 @@ export default async function adminAgreementRoutes(fastify) {
   })
 
   // Get acceptance stats for current agreement
-  fastify.get('/agreements/acceptance-stats', { onRequest: [fastify.authenticate] }, async () => {
+  fastify.get('/agreements/acceptance-stats', { onRequest: [fastify.requireRole('ADMIN')] }, async () => {
     const current = await prisma.affiliateAgreement.findFirst({ where: { isCurrent: true } })
     if (!current) return { required: false }
 

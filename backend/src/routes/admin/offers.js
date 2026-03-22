@@ -8,7 +8,7 @@ export default async function adminOfferRoutes(fastify) {
   const { prisma } = fastify
 
   // List all offers with filters
-  fastify.get('/offers', { onRequest: [fastify.authenticate] }, async (req) => {
+  fastify.get('/offers', { onRequest: [fastify.requireRole('ADMIN')] }, async (req) => {
     const { status, vertical, search, page = 1, limit = 30 } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
 
@@ -30,7 +30,7 @@ export default async function adminOfferRoutes(fastify) {
           vertical: true,
           paymentModel: true,
           payout: true,
-          geo: true,
+          allowedGeos: true,
           createdAt: true,
           advertiser: {
             select: { companyName: true, user: { select: { email: true } } }
@@ -46,7 +46,7 @@ export default async function adminOfferRoutes(fastify) {
 
   // Change offer status (approve/reject/pause/archive)
   fastify.patch('/offers/:id/status', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.requireRole('ADMIN')],
     schema: {
       body: {
         type: 'object',

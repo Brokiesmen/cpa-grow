@@ -25,19 +25,19 @@ const QUEUE_NAME = 'system-tasks'
 export async function calculateTrafficQualityScore(publisherId, period = '30d') {
   const result = await prisma.$queryRaw`
     SELECT
-      COUNT(DISTINCT c.id)::int                                         AS total_clicks,
-      COUNT(DISTINCT c.id) FILTER (WHERE c.is_unique = true)::int       AS unique_clicks,
-      COUNT(DISTINCT c.id) FILTER (WHERE c.is_fraud = true)::int        AS fraud_clicks,
-      AVG(c.fraud_score)::float                                          AS avg_fraud_score,
-      COUNT(DISTINCT conv.id)::int                                       AS total_conversions,
-      COUNT(DISTINCT conv.id) FILTER (WHERE conv.status = 'APPROVED')::int AS approved_convs,
-      COUNT(DISTINCT conv.id) FILTER (WHERE conv.status = 'REJECTED')::int AS rejected_convs,
-      AVG(EXTRACT(EPOCH FROM (conv.created_at - c.created_at)))::float   AS avg_ctit_seconds
+      COUNT(DISTINCT c.id)::int                                                AS total_clicks,
+      COUNT(DISTINCT c.id) FILTER (WHERE c."isUnique" = true)::int            AS unique_clicks,
+      COUNT(DISTINCT c.id) FILTER (WHERE c."isFraud" = true)::int             AS fraud_clicks,
+      AVG(c."fraudScore")::float                                               AS avg_fraud_score,
+      COUNT(DISTINCT conv.id)::int                                             AS total_conversions,
+      COUNT(DISTINCT conv.id) FILTER (WHERE conv.status = 'APPROVED')::int    AS approved_convs,
+      COUNT(DISTINCT conv.id) FILTER (WHERE conv.status = 'REJECTED')::int    AS rejected_convs,
+      AVG(EXTRACT(EPOCH FROM (conv."createdAt" - c."createdAt")))::float      AS avg_ctit_seconds
     FROM clicks c
-    LEFT JOIN conversions conv ON conv.click_id = c.click_id
-    WHERE c.publisher_id = ${publisherId}
-      AND c.created_at > NOW() - INTERVAL '30 days'
-      AND c.is_sandbox = false
+    LEFT JOIN conversions conv ON conv."clickId" = c."clickId"
+    WHERE c."publisherId" = ${publisherId}
+      AND c."createdAt" > NOW() - INTERVAL '30 days'
+      AND c."isSandbox" = false
   `
 
   const s = result[0]

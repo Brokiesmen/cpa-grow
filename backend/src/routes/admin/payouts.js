@@ -8,7 +8,7 @@ export default async function adminPayoutRoutes(fastify) {
   const { prisma } = fastify
 
   // List payouts with filters
-  fastify.get('/payouts', { onRequest: [fastify.authenticate] }, async (req) => {
+  fastify.get('/payouts', { onRequest: [fastify.requireRole('ADMIN')] }, async (req) => {
     const { status, method, page = 1, limit = 30 } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
 
@@ -47,7 +47,7 @@ export default async function adminPayoutRoutes(fastify) {
 
   // Update payout status
   fastify.patch('/payouts/:id/status', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.requireRole('ADMIN')],
     schema: {
       body: {
         type: 'object',
@@ -88,7 +88,7 @@ export default async function adminPayoutRoutes(fastify) {
       if ((status === 'CANCELLED' || status === 'FAILED') && before.status === 'PROCESSING') {
         await tx.publisherBalance.updateMany({
           where: { publisherId: before.publisherId, currency: before.currency },
-          data: { available: { increment: before.amount }, onHold: { decrement: before.amount } }
+          data: { available: { increment: before.amount }, hold: { decrement: before.amount } }
         })
       }
 

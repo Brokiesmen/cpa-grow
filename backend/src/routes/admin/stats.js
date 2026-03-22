@@ -6,7 +6,7 @@ export default async function adminStatsRoutes(fastify) {
   const { prisma } = fastify
 
   // Platform overview stats
-  fastify.get('/stats', { onRequest: [fastify.authenticate] }, async () => {
+  fastify.get('/stats', { onRequest: [fastify.requireRole('ADMIN')] }, async () => {
     const now = new Date()
     const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000)
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)

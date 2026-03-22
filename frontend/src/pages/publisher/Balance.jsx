@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, X, Wallet, FileText } from 'lucide-react'
 import api from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../components/Toast'
 import Badge from '../../components/Badge'
 
@@ -15,6 +16,7 @@ const METHODS = [
 ]
 
 export default function PublisherBalance() {
+  const { user } = useAuth()
   const [balances, setBalances] = useState([])
   const [payouts, setPayouts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -164,7 +166,7 @@ export default function PublisherBalance() {
               borderRadius: 9, border: '1px solid var(--border)',
               color: 'var(--text)', wordBreak: 'break-all', lineHeight: 1.6,
             }}>
-              {localStorage.getItem('access_token')?.slice(0, 40) || '—'}...
+              {user?.profile?.apiKey || '—'}
             </div>
           </div>
         </div>

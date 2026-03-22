@@ -221,7 +221,7 @@ export default function AdminUsers() {
                     {u.publisher?.username || u.advertiser?.companyName || '—'}
                   </td>
                   <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtDate(u.createdAt)}</td>
-                  <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtDate(u.lastLoginAt)}</td>
+                  <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{u.lastLoginAt ? fmtDate(u.lastLoginAt) : "—"}</td>
                   <td>
                     <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                       <button className="btn btn-sm btn-secondary" onClick={() => setStatusModal(u)} title="Change status">

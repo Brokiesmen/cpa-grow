@@ -8,7 +8,7 @@ export default async function adminUserRoutes(fastify) {
   const { prisma } = fastify
 
   // List users with filters & pagination
-  fastify.get('/users', { onRequest: [fastify.authenticate] }, async (req) => {
+  fastify.get('/users', { onRequest: [fastify.requireRole('ADMIN')] }, async (req) => {
     const { role, status, search, page = 1, limit = 30 } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
 
@@ -35,9 +35,8 @@ export default async function adminUserRoutes(fastify) {
           role: true,
           status: true,
           createdAt: true,
-          lastLoginAt: true,
           publisher: {
-            select: { username: true, tqs: true, apiKey: true }
+            select: { username: true, trafficQualityScore: true, apiKey: true }
           },
           advertiser: {
             select: { companyName: true, balance: true, apiKey: true }
@@ -54,7 +53,7 @@ export default async function adminUserRoutes(fastify) {
   })
 
   // Get single user with full details
-  fastify.get('/users/:id', { onRequest: [fastify.authenticate] }, async (req, reply) => {
+  fastify.get('/users/:id', { onRequest: [fastify.requireRole('ADMIN')] }, async (req, reply) => {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
       select: {
@@ -63,7 +62,6 @@ export default async function adminUserRoutes(fastify) {
         role: true,
         status: true,
         createdAt: true,
-        lastLoginAt: true,
         googleId: true,
         telegramId: true,
         walletAddress: true,
@@ -73,10 +71,10 @@ export default async function adminUserRoutes(fastify) {
             telegram: true,
             website: true,
             trafficTypes: true,
-            tqs: true,
+            trafficQualityScore: true,
             apiKey: true,
             referralCode: true,
-            _count: { select: { trackingLinks: true, applications: true, conversions: true, payouts: true } }
+            _count: { select: { applications: true, conversions: true, payouts: true } }
           }
         },
         advertiser: {
@@ -101,7 +99,7 @@ export default async function adminUserRoutes(fastify) {
 
   // Change user status
   fastify.patch('/users/:id/status', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.requireRole('ADMIN')],
     schema: {
       body: {
         type: 'object',
@@ -139,7 +137,7 @@ export default async function adminUserRoutes(fastify) {
 
   // Change user role
   fastify.patch('/users/:id/role', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.requireRole('ADMIN')],
     schema: {
       body: {
         type: 'object',
@@ -177,7 +175,7 @@ export default async function adminUserRoutes(fastify) {
   })
 
   // Delete all user sessions (force logout)
-  fastify.post('/users/:id/logout-all', { onRequest: [fastify.authenticate] }, async (req, reply) => {
+  fastify.post('/users/:id/logout-all', { onRequest: [fastify.requireRole('ADMIN')] }, async (req, reply) => {
     const { id } = req.params
     const user = await prisma.user.findUnique({ where: { id }, select: { id: true } })
     if (!user) return reply.code(404).send({ error: 'NOT_FOUND' })
@@ -195,7 +193,7 @@ export default async function adminUserRoutes(fastify) {
   })
 
   // Get user audit log
-  fastify.get('/users/:id/audit', { onRequest: [fastify.authenticate] }, async (req) => {
+  fastify.get('/users/:id/audit', { onRequest: [fastify.requireRole('ADMIN')] }, async (req) => {
     const { page = 1, limit = 20 } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
 

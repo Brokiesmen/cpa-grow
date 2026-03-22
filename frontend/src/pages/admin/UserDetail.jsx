@@ -90,7 +90,7 @@ export default function AdminUserDetail() {
             <Row label="Role"          value={<span className={`badge ${ROLE_BADGE[user.role]}`}>{user.role}</span>} />
             <Row label="Status"        value={<span className={`badge ${STATUS_BADGE[user.status]}`}>{user.status}</span>} />
             <Row label="Registered"    value={fmtDate(user.createdAt)} />
-            <Row label="Last Login"    value={fmtDate(user.lastLoginAt)} />
+            <Row label="Last Login"    value={user.lastLoginAt ? fmtDate(user.lastLoginAt) : "—"} />
             <Row label="Google Auth"   value={user.googleId ? '✓ Connected' : '✗ Not connected'} />
             <Row label="Telegram"      value={user.telegramId ? '✓ Connected' : '✗ Not connected'} />
             <Row label="Wallet"        value={user.walletAddress ? <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{user.walletAddress}</span> : null} />
@@ -108,7 +108,7 @@ export default function AdminUserDetail() {
               <Row label="Telegram"      value={user.publisher.telegram} />
               <Row label="Website"       value={user.publisher.website} />
               <Row label="Traffic Types" value={user.publisher.trafficTypes?.join(', ')} />
-              <Row label="TQS Score"     value={user.publisher.tqs} />
+              <Row label="TQS Score"     value={user.publisher.trafficQualityScore} />
               <Row label="Tracking Links" value={user.publisher._count?.trackingLinks} />
               <Row label="Applications"  value={user.publisher._count?.applications} />
               <Row label="Conversions"   value={user.publisher._count?.conversions} />
