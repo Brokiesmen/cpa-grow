@@ -2,7 +2,7 @@ import { Component } from 'react'
 import { useConnect, useAccount, useSignMessage } from 'wagmi'
 import api from '../api/client'
 
-function WalletButtonInner({ onSuccess, onError, onUsernameRequired, role, isRegister, disabled }) {
+function WalletButtonInner({ onSuccess, onError, onUsernameRequired, role, isRegister, disabled, renderAs }) {
   const { connect, connectors } = useConnect()
   const { address, isConnected } = useAccount()
   const { signMessageAsync } = useSignMessage()
@@ -35,6 +35,23 @@ function WalletButtonInner({ onSuccess, onError, onUsernameRequired, role, isReg
     }
   }
 
+  const label = isConnected && address
+    ? `${address.slice(0, 6)}...${address.slice(-4)}`
+    : isRegister ? 'Register with Web3 Wallet' : 'Wallet'
+
+  if (renderAs === 'row') {
+    return (
+      <button className="auth-social-row" onClick={handleClick} disabled={disabled} type="button">
+        <div className="auth-social-ico wallet">
+          <img src="https://avatars.githubusercontent.com/u/37784886" alt="WalletConnect"
+            style={{ borderRadius: 4 }} />
+        </div>
+        {label}
+        <span className="soc-chevron">›</span>
+      </button>
+    )
+  }
+
   return (
     <button className="auth-social-btn wallet" onClick={handleClick} disabled={disabled}>
       <img src="https://avatars.githubusercontent.com/u/37784886" alt="WalletConnect"
@@ -53,13 +70,26 @@ class WalletErrorBoundary extends Component {
   }
   static getDerivedStateFromError() { return { failed: true } }
   render() {
-    if (this.state.failed) return (
-      <button className="auth-social-btn wallet" disabled>
-        <img src="https://avatars.githubusercontent.com/u/37784886" alt="WalletConnect"
-          style={{ borderRadius: 4, opacity: 0.5 }} />
-        Web3 Wallet (unavailable)
-      </button>
-    )
+    if (this.state.failed) {
+      const { renderAs } = this.props.children?.props || {}
+      if (renderAs === 'row') return (
+        <button className="auth-social-row" disabled type="button">
+          <div className="auth-social-ico wallet">
+            <img src="https://avatars.githubusercontent.com/u/37784886" alt="WalletConnect"
+              style={{ borderRadius: 4, opacity: 0.5 }} />
+          </div>
+          Wallet (unavailable)
+          <span className="soc-chevron">›</span>
+        </button>
+      )
+      return (
+        <button className="auth-social-btn wallet" disabled>
+          <img src="https://avatars.githubusercontent.com/u/37784886" alt="WalletConnect"
+            style={{ borderRadius: 4, opacity: 0.5 }} />
+          Web3 Wallet (unavailable)
+        </button>
+      )
+    }
     return this.props.children
   }
 }

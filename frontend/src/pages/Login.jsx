@@ -1,23 +1,124 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useTelegram } from '../context/TelegramContext'
+import { getInitData } from '../lib/telegram'
 import api from '../api/client'
 import GoogleButton from '../components/GoogleButton'
 import WalletButton from '../components/WalletButton'
 import './Auth.css'
+
+// Онбординг для новых пользователей Telegram
+function TelegramOnboarding({ tgUser, initData, onSuccess, onError }) {
+  const [role, setRole] = useState('PUBLISHER')
+  const [username, setUsername] = useState(tgUser.username || '')
+  const [loading, setLoading] = useState(false)
+  const { loginWithToken } = useAuth()
+
+  const handleSubmit = async e => {
+    e.preventDefault()
+    if (role === 'PUBLISHER' && username.trim().length < 3) {
+      onError('Username must be at least 3 characters')
+      return
+    }
+    setLoading(true)
+    try {
+      const { data } = await api.post('/auth/telegram-webapp', {
+        initData,
+        role,
+        username: role === 'PUBLISHER' ? username.trim() : undefined,
+      })
+      const user = await loginWithToken(data.access_token, data.user)
+      onSuccess(user.role)
+    } catch (err) {
+      const code = err.response?.data?.error
+      if (code === 'USERNAME_TAKEN') onError('Username is already taken, choose another')
+      else onError(err.response?.data?.message || 'Registration failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-header">
+        {tgUser.photo_url
+          ? <img src={tgUser.photo_url} alt="" className="auth-tg-photo" style={{ marginBottom: 14 }} />
+          : <div className="auth-tg-initials" style={{ marginBottom: 14 }}>{tgUser.first_name?.[0] || '?'}</div>
+        }
+        <div className="auth-title">Hi, {tgUser.first_name}!</div>
+        <div className="auth-subtitle">Choose your account type to get started</div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="auth-body">
+        <div className="auth-role-grid">
+          <button type="button" className={`auth-role-btn${role === 'PUBLISHER' ? ' active' : ''}`} onClick={() => setRole('PUBLISHER')}>
+            <span className="role-icon">📢</span>
+            <span className="role-name">Publisher</span>
+            <span className="role-desc">Drive traffic, earn payouts</span>
+          </button>
+          <button type="button" className={`auth-role-btn${role === 'ADVERTISER' ? ' active' : ''}`} onClick={() => setRole('ADVERTISER')}>
+            <span className="role-icon">🎯</span>
+            <span className="role-name">Advertiser</span>
+            <span className="role-desc">Launch offers & campaigns</span>
+          </button>
+        </div>
+
+        {role === 'PUBLISHER' && (
+          <div className="auth-section">
+            <div className="auth-row">
+              <div className="auth-row-icon blue">@</div>
+              <input
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Username"
+                minLength={3}
+                required
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        )}
+
+        <button className="auth-btn-primary" type="submit" disabled={loading}>
+          {loading ? <span className="spinner" /> : `Join as ${role === 'PUBLISHER' ? 'Publisher' : 'Advertiser'}`}
+        </button>
+
+        <p className="auth-footer-link">
+          Already have an account?{' '}
+          <button type="button" onClick={() => onError('')}>Sign in</button>
+        </p>
+      </form>
+    </div>
+  )
+}
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { login } = useAuth()
+  const [tgNewUser, setTgNewUser] = useState(null)
+
+  const { login, loginWithToken } = useAuth()
+  const { isTelegramApp } = useTelegram()
   const navigate = useNavigate()
 
-  const redirect = (role) => {
+  const redirect = role => {
     if (role === 'PUBLISHER') navigate('/publisher')
     else if (role === 'ADVERTISER') navigate('/advertiser')
     else navigate('/admin')
+  }
+
+  if (tgNewUser) {
+    return (
+      <TelegramOnboarding
+        tgUser={tgNewUser}
+        initData={getInitData()}
+        onSuccess={redirect}
+        onError={msg => { setTgNewUser(null); if (msg) setError(msg) }}
+      />
+    )
   }
 
   const handleEmail = async e => {
@@ -37,12 +138,13 @@ export default function Login() {
     }
   }
 
-  const handleGoogleSuccess = async (accessToken) => {
+  const handleGoogleSuccess = async token => {
     setLoading(true)
     setError('')
     try {
-      const { data } = await api.post('/auth/google', { idToken: accessToken })
-      redirect(data.user.role)
+      const { data } = await api.post('/auth/google', { idToken: token })
+      const user = await loginWithToken(data.access_token, data.user)
+      redirect(user.role)
     } catch (err) {
       const code = err.response?.data?.error
       if (code === 'GOOGLE_AUTH_NOT_CONFIGURED') setError('Google login not configured yet')
@@ -52,17 +154,42 @@ export default function Login() {
     }
   }
 
-  const handleTelegram = () => {
+  const handleTelegram = async () => {
+    setError('')
+
+    if (isTelegramApp) {
+      const initData = getInitData()
+      if (!initData) { setError('Telegram data not available'); return }
+      setLoading(true)
+      try {
+        const { data } = await api.post('/auth/telegram-webapp', { initData })
+        if (data.is_new_user) {
+          setTgNewUser(data.tg_user)
+        } else {
+          const user = await loginWithToken(data.access_token, data.user)
+          redirect(user.role)
+        }
+      } catch (err) {
+        const code = err.response?.data?.error
+        if (code === 'TELEGRAM_AUTH_NOT_CONFIGURED') setError('Telegram bot not configured on server')
+        else setError(err.response?.data?.message || 'Telegram login failed')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     if (!import.meta.env.VITE_TELEGRAM_BOT_NAME) {
       setError('Telegram login is not configured yet')
       return
     }
-    window.TelegramLoginCallback = async (data) => {
+    window.TelegramLoginCallback = async data => {
       setLoading(true)
       setError('')
       try {
         const res = await api.post('/auth/telegram', data)
-        redirect(res.data.user.role)
+        const user = await loginWithToken(res.data.access_token, res.data.user)
+        redirect(user.role)
       } catch (err) {
         setError(err.response?.data?.message || 'Telegram login failed')
       } finally {
@@ -78,66 +205,85 @@ export default function Login() {
 
   return (
     <div className="auth-wrap">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-mark">G</div>
-          <span className="auth-logo-name">Grow Network</span>
-        </div>
+      {/* Header */}
+      <div className="auth-header">
+        <div className="auth-logo-wrap">G</div>
+        <div className="auth-title">Grow Network</div>
+        <div className="auth-subtitle">CPA Platform</div>
+      </div>
 
-        <div className="auth-tabs">
-          <button className="auth-tab active">Sign in</button>
-          <Link to="/register" className="auth-tab" style={{ textDecoration: 'none', textAlign: 'center' }}>
-            Create account
-          </Link>
-        </div>
+      {/* Tab switcher */}
+      <div className="auth-tabs-row">
+        <button className="auth-tab-btn active">Sign in</button>
+        <Link to="/register" className="auth-tab-btn">Create account</Link>
+      </div>
 
+      {/* Body */}
+      <div className="auth-body">
         {error && <div className="auth-error">{error}</div>}
 
-        <form onSubmit={handleEmail} className="auth-form">
-          <div className="auth-field">
-            <label className="auth-label">Email</label>
-            <div className="auth-input-wrap">
-              <span className="auth-input-icon">✉</span>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com" required />
+        {/* Email + password */}
+        <form onSubmit={handleEmail} style={{ display: 'contents' }}>
+          <div className="auth-section">
+            <div className="auth-row">
+              <div className="auth-row-icon blue">✉</div>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Email"
+                required
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
+            <div className="auth-row">
+              <div className="auth-row-icon gray">🔒</div>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Password"
+                required
+                autoComplete="current-password"
+              />
             </div>
           </div>
-          <div className="auth-field">
-            <label className="auth-label">Password</label>
-            <div className="auth-input-wrap">
-              <span className="auth-input-icon">🔒</span>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••" required />
-            </div>
-          </div>
-          <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? <span className="spinner" /> : 'Sign in'}
+
+          <button className="auth-btn-primary" type="submit" disabled={loading}>
+            {loading ? <span className="spinner" /> : 'Sign In'}
           </button>
         </form>
 
-        <div className="auth-divider">or continue with</div>
+        <div className="auth-or">or continue with</div>
 
-        <div className="auth-social-grid">
-          <GoogleButton
-            onSuccess={handleGoogleSuccess}
-            onError={(msg) => setError(msg)}
-            disabled={loading}
-            label="Continue with Google"
-          />
-
-          <button className="auth-social-btn telegram" onClick={handleTelegram} disabled={loading}>
-            <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" />
-            Continue with Telegram
+        {/* Social */}
+        <div className="auth-social-list">
+          <button className="auth-social-row" onClick={handleTelegram} disabled={loading} type="button">
+            <div className="auth-social-ico tg">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" />
+            </div>
+            {isTelegramApp ? 'Continue with Telegram' : 'Telegram'}
+            <span className="soc-chevron">›</span>
           </button>
 
-          <WalletButton
-            onSuccess={(role) => redirect(role)}
-            onError={(msg) => setError(msg)}
+          <GoogleButton
+            onSuccess={handleGoogleSuccess}
+            onError={msg => setError(msg)}
             disabled={loading}
+            label="Google"
+            renderAs="row"
+          />
+
+          <WalletButton
+            onSuccess={role => redirect(role)}
+            onError={msg => setError(msg)}
+            disabled={loading}
+            renderAs="row"
           />
         </div>
 
-        <p className="auth-footer">
+        <p className="auth-footer-link">
           Don't have an account? <Link to="/register">Register</Link>
         </p>
       </div>

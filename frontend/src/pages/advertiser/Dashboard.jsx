@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Megaphone, ArrowLeftRight, DollarSign, Wallet, FlaskConical, MessageSquareWarning, ArrowRight, Plus } from 'lucide-react'
 import api from '../../api/client'
 import StatCard from '../../components/StatCard'
 import Badge from '../../components/Badge'
@@ -18,8 +19,23 @@ function mockData() {
   })
 }
 
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border-2)', borderRadius: 10, padding: '10px 14px', fontSize: 12, boxShadow: 'var(--shadow-md)' }}>
+      <div style={{ fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>{label}</div>
+      {payload.map(p => (
+        <div key={p.name} style={{ color: p.color, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
+          {p.name}: <strong>{p.name === 'spend' ? '$' : ''}{p.value}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function AdvertiserDashboard() {
-  const [stats, setStats] = useState({ offers: 0, conversions: 0, spend: 0, balance: 0, pendingApps: 0 })
+  const [stats] = useState({ offers: 0, conversions: 0, spend: 0, balance: 0 })
   const [chart] = useState(mockData())
   const [disputes, setDisputes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,32 +48,25 @@ export default function AdvertiserDashboard() {
     }).finally(() => setLoading(false))
   }, [])
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null
-    return (
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
-        <div style={{ fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>{label}</div>
-        {payload.map(p => (
-          <div key={p.name} style={{ color: p.color }}>
-            {p.name === 'spend' ? '$' : ''}{p.value}
-          </div>
-        ))}
-      </div>
-    )
-  }
-
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <div className="page-title">Advertiser Dashboard</div>
-        <div className="page-subtitle">Campaign overview</div>
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <div className="page-title">Advertiser Dashboard</div>
+          <div className="page-subtitle">Campaign overview</div>
+        </div>
+        <div className="page-header-actions">
+          <Link to="/advertiser/offers" className="btn btn-primary">
+            <Plus size={15} /> Create Offer
+          </Link>
+        </div>
       </div>
 
-      <div className="grid-4">
-        <StatCard label="Active Offers" value={stats.offers || '0'} color="blue" icon="⊞" />
-        <StatCard label="Conversions (30d)" value={stats.conversions || '0'} color="green" icon="↯" />
-        <StatCard label="Spend (30d)" value={`$${stats.spend || '0'}`} color="amber" icon="$" />
-        <StatCard label="Balance" value={`$${stats.balance || '0'}`} color="green" icon="◎" />
+      <div className="grid-4 stagger">
+        <StatCard label="Active Offers"       value={stats.offers || '0'}      color="blue"  icon={Megaphone} />
+        <StatCard label="Conversions (30d)"   value={stats.conversions || '0'} color="green" icon={ArrowLeftRight} />
+        <StatCard label="Spend (30d)"         value={`$${stats.spend || '0'}`} color="amber" icon={DollarSign} />
+        <StatCard label="Balance"             value={`$${stats.balance || '0'}`} color="green" icon={Wallet} />
       </div>
 
       <div className="grid-2 mt-6">
@@ -71,20 +80,26 @@ export default function AdvertiserDashboard() {
                 <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="conversions" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="spend" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="spend" fill="rgba(255,255,255,.12)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="card">
-          <div className="card-header">Recent Disputes
+          <div className="card-header">
+            Recent Disputes
             {disputes.length > 0 && (
-              <Link to="/advertiser/disputes" style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 400 }}>View all</Link>
+              <Link to="/advertiser/disputes" style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                View all <ArrowRight size={12} />
+              </Link>
             )}
           </div>
           {disputes.length === 0 ? (
-            <div className="empty"><div className="empty-icon">⊿</div><p>No open disputes</p></div>
+            <div className="empty">
+              <MessageSquareWarning size={28} style={{ opacity: .3, marginBottom: 10 }} />
+              <p>No open disputes</p>
+            </div>
           ) : (
             <div className="table-wrap">
               <table>
@@ -104,10 +119,13 @@ export default function AdvertiserDashboard() {
         </div>
       </div>
 
-      <div className="mt-6 flex gap-3">
-        <Link to="/advertiser/offers" className="btn btn-primary">Create Offer</Link>
-        <Link to="/advertiser/sandbox" className="btn btn-secondary">⊙ Test Integration</Link>
-        <Link to="/advertiser/disputes" className="btn btn-secondary">Disputes</Link>
+      <div className="mt-6 flex gap-3 flex-mobile-wrap">
+        <Link to="/advertiser/sandbox" className="btn btn-secondary" style={{ flex: '1 1 auto' }}>
+          <FlaskConical size={15} /> Test Integration
+        </Link>
+        <Link to="/advertiser/disputes" className="btn btn-secondary" style={{ flex: '1 1 auto' }}>
+          <MessageSquareWarning size={15} /> Disputes
+        </Link>
       </div>
     </div>
   )

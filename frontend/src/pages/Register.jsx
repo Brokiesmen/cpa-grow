@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import GoogleButton from '../components/GoogleButton'
 import WalletButton from '../components/WalletButton'
 import WalletRegisterComplete from '../components/WalletRegisterComplete'
@@ -14,10 +15,11 @@ export default function Register() {
   const [usernameModal, setUsernameModal] = useState(null)
   const [modalUsername, setModalUsername] = useState('')
   const navigate = useNavigate()
+  const { loginWithToken } = useAuth()
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const redirect = (role) => {
+  const redirect = role => {
     if (role === 'PUBLISHER') navigate('/publisher')
     else navigate('/advertiser')
   }
@@ -54,7 +56,10 @@ export default function Register() {
       } else if (provider === 'telegram') {
         res = await api.post('/auth/telegram', { ...data, role: form.role, username: modalUsername })
       }
-      if (res?.data?.user) redirect(res.data.user.role)
+      if (res?.data?.access_token) {
+        const user = await loginWithToken(res.data.access_token, res.data.user)
+        redirect(user.role)
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed')
     } finally {
@@ -62,12 +67,13 @@ export default function Register() {
     }
   }
 
-  const handleGoogleSuccess = async (accessToken) => {
+  const handleGoogleSuccess = async accessToken => {
     setLoading(true)
     setError('')
     try {
       const res = await api.post('/auth/google', { idToken: accessToken, role: form.role })
-      redirect(res.data.user.role)
+      const user = await loginWithToken(res.data.access_token, res.data.user)
+      redirect(user.role)
     } catch (err) {
       if (err.response?.data?.error === 'USERNAME_REQUIRED') {
         setUsernameModal({ provider: 'google', data: { idToken: accessToken } })
@@ -84,12 +90,13 @@ export default function Register() {
       setError('Telegram login is not configured yet')
       return
     }
-    window.TelegramLoginCallback = async (data) => {
+    window.TelegramLoginCallback = async data => {
       setLoading(true)
       setError('')
       try {
         const res = await api.post('/auth/telegram', { ...data, role: form.role })
-        redirect(res.data.user.role)
+        const user = await loginWithToken(res.data.access_token, res.data.user)
+        redirect(user.role)
       } catch (err) {
         if (err.response?.data?.error === 'USERNAME_REQUIRED') {
           setUsernameModal({ provider: 'telegram', data })
@@ -107,17 +114,19 @@ export default function Register() {
     )
   }
 
+  // ── Success screen ──
   if (done) return (
     <div className="auth-wrap">
-      <div className="auth-card" style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 44, marginBottom: 16 }}>✅</div>
-        <h2 style={{ marginBottom: 8 }}>Registration submitted</h2>
-        <p style={{ color: '#6b7280', marginBottom: 24, fontSize: 13 }}>
-          Your account is awaiting admin approval.<br />You'll be notified once approved.
-        </p>
-        <Link to="/login" className="auth-submit"
-          style={{ display: 'block', lineHeight: '48px', textDecoration: 'none', textAlign: 'center' }}>
-          Back to Login
+      <div className="auth-header">
+        <div className="auth-success-icon">✓</div>
+        <div className="auth-title">Account submitted!</div>
+        <div className="auth-subtitle">
+          Awaiting admin approval.<br />You'll be notified once approved.
+        </div>
+      </div>
+      <div className="auth-body">
+        <Link to="/login" className="auth-btn-primary" style={{ textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          Back to Sign In
         </Link>
       </div>
     </div>
@@ -125,18 +134,26 @@ export default function Register() {
 
   return (
     <div className="auth-wrap">
+
+      {/* Username bottom sheet for OAuth */}
       {usernameModal && (
-        <div className="auth-modal-overlay">
-          <div className="auth-modal-card">
-            <div className="auth-modal-title">Choose a username</div>
-            <div className="auth-modal-sub">This will be your public handle on the platform</div>
-            {error && <div className="auth-error">{error}</div>}
-            <div className="auth-field" style={{ marginBottom: 16 }}>
-              <label className="auth-label">Username</label>
-              <div className="auth-input-wrap">
-                <span className="auth-input-icon">@</span>
-                <input value={modalUsername} onChange={e => setModalUsername(e.target.value)}
-                  placeholder="yourhandle" minLength={3} />
+        <div className="auth-sheet-overlay" onClick={() => { setUsernameModal(null); setError('') }}>
+          <div className="auth-sheet" onClick={e => e.stopPropagation()}>
+            <div className="auth-sheet-handle" />
+            <div className="auth-sheet-title">Choose a username</div>
+            <div className="auth-sheet-sub">This will be your public handle on the platform</div>
+            {error && <div className="auth-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="auth-section" style={{ marginBottom: 16 }}>
+              <div className="auth-row">
+                <div className="auth-row-icon blue">@</div>
+                <input
+                  value={modalUsername}
+                  onChange={e => setModalUsername(e.target.value)}
+                  placeholder="yourhandle"
+                  minLength={3}
+                  autoFocus
+                  autoComplete="off"
+                />
               </div>
             </div>
             {usernameModal.provider === 'wallet' ? (
@@ -144,17 +161,25 @@ export default function Register() {
                 address={usernameModal.data.address}
                 username={modalUsername}
                 role={form.role}
-                onSuccess={(role) => redirect(role)}
-                onError={(msg) => setError(msg)}
+                onSuccess={role => redirect(role)}
+                onError={msg => setError(msg)}
                 onCancel={() => { setUsernameModal(null); setError('') }}
               />
             ) : (
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="auth-social-btn"
+                <button
+                  className="auth-btn-secondary"
                   onClick={() => { setUsernameModal(null); setError('') }}
-                  style={{ flex: 1 }}>Cancel</button>
-                <button className="auth-submit" onClick={completeOAuth} disabled={loading}
-                  style={{ flex: 2 }}>
+                  style={{ flex: 1 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="auth-btn-primary"
+                  onClick={completeOAuth}
+                  disabled={loading}
+                  style={{ flex: 2 }}
+                >
                   {loading ? <span className="spinner" /> : 'Complete registration'}
                 </button>
               </div>
@@ -163,99 +188,133 @@ export default function Register() {
         </div>
       )}
 
-      <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-mark">G</div>
-          <span className="auth-logo-name">Grow Network</span>
-        </div>
+      {/* Header */}
+      <div className="auth-header">
+        <div className="auth-logo-wrap">G</div>
+        <div className="auth-title">Grow Network</div>
+        <div className="auth-subtitle">CPA Platform</div>
+      </div>
 
-        <div className="auth-tabs">
-          <Link to="/login" className="auth-tab" style={{ textDecoration: 'none', textAlign: 'center' }}>
-            Sign in
-          </Link>
-          <button className="auth-tab active">Create account</button>
-        </div>
+      {/* Tab switcher */}
+      <div className="auth-tabs-row">
+        <Link to="/login" className="auth-tab-btn">Sign in</Link>
+        <button className="auth-tab-btn active">Create account</button>
+      </div>
 
+      {/* Body */}
+      <div className="auth-body">
         {error && !usernameModal && <div className="auth-error">{error}</div>}
 
-        <form onSubmit={handleEmail} className="auth-form">
-          <div className="auth-field">
-            <label className="auth-label">I am a</label>
-            <div className="auth-input-wrap">
-              <span className="auth-input-icon">👤</span>
-              <select value={form.role} onChange={set('role')}>
-                <option value="PUBLISHER">Publisher (Webmaster)</option>
-                <option value="ADVERTISER">Advertiser</option>
-              </select>
-            </div>
-          </div>
-          <div className="auth-field">
-            <label className="auth-label">Email</label>
-            <div className="auth-input-wrap">
-              <span className="auth-input-icon">✉</span>
-              <input type="email" value={form.email} onChange={set('email')}
-                placeholder="you@example.com" required />
-            </div>
-          </div>
-          {form.role === 'PUBLISHER' && (
-            <div className="auth-field">
-              <label className="auth-label">Username</label>
-              <div className="auth-input-wrap">
-                <span className="auth-input-icon">@</span>
-                <input value={form.username} onChange={set('username')}
-                  placeholder="yourhandle" required minLength={3} />
-              </div>
-            </div>
-          )}
-          <div className="auth-field">
-            <label className="auth-label">Password</label>
-            <div className="auth-input-wrap">
-              <span className="auth-input-icon">🔒</span>
-              <input type="password" value={form.password} onChange={set('password')}
-                placeholder="Min 8 characters" required minLength={8} />
-            </div>
-          </div>
-          {form.role === 'PUBLISHER' && (
-            <div className="auth-field">
-              <label className="auth-label">Referral code <span style={{ color: '#9ca3af' }}>(optional)</span></label>
-              <div className="auth-input-wrap">
-                <span className="auth-input-icon">🎁</span>
-                <input value={form.referralCode} onChange={set('referralCode')} placeholder="abc12345" />
-              </div>
-            </div>
-          )}
-          <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? <span className="spinner" /> : 'Create account'}
+        {/* Role selector */}
+        <div className="auth-role-grid" style={{ marginBottom: 14 }}>
+          <button
+            type="button"
+            className={`auth-role-btn${form.role === 'PUBLISHER' ? ' active' : ''}`}
+            onClick={() => set('role')({ target: { value: 'PUBLISHER' } })}
+          >
+            <span className="role-icon">📢</span>
+            <span className="role-name">Publisher</span>
+            <span className="role-desc">Drive traffic, earn payouts</span>
           </button>
-        </form>
+          <button
+            type="button"
+            className={`auth-role-btn${form.role === 'ADVERTISER' ? ' active' : ''}`}
+            onClick={() => set('role')({ target: { value: 'ADVERTISER' } })}
+          >
+            <span className="role-icon">🎯</span>
+            <span className="role-name">Advertiser</span>
+            <span className="role-desc">Launch offers & campaigns</span>
+          </button>
+        </div>
 
-        <div className="auth-divider">or register with</div>
+        {/* Form fields */}
+        <div className="auth-section">
+          <div className="auth-row">
+            <div className="auth-row-icon blue">✉</div>
+            <input
+              type="email"
+              value={form.email}
+              onChange={set('email')}
+              placeholder="Email"
+              required
+              autoComplete="email"
+            />
+          </div>
+          {form.role === 'PUBLISHER' && (
+            <div className="auth-row">
+              <div className="auth-row-icon blue">@</div>
+              <input
+                value={form.username}
+                onChange={set('username')}
+                placeholder="Username"
+                required
+                minLength={3}
+                autoComplete="off"
+              />
+            </div>
+          )}
+          <div className="auth-row">
+            <div className="auth-row-icon gray">🔒</div>
+            <input
+              type="password"
+              value={form.password}
+              onChange={set('password')}
+              placeholder="Password (min 8 chars)"
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </div>
+          {form.role === 'PUBLISHER' && (
+            <div className="auth-row">
+              <div className="auth-row-icon gray">🎁</div>
+              <input
+                value={form.referralCode}
+                onChange={set('referralCode')}
+                placeholder="Referral code (optional)"
+                autoComplete="off"
+              />
+            </div>
+          )}
+        </div>
 
-        <div className="auth-social-grid">
+        <button className="auth-btn-primary" onClick={handleEmail} disabled={loading}>
+          {loading ? <span className="spinner" /> : `Join as ${form.role === 'PUBLISHER' ? 'Publisher' : 'Advertiser'}`}
+        </button>
+
+        <div className="auth-or">or continue with</div>
+
+        {/* Social */}
+        <div className="auth-social-list">
+          <button className="auth-social-row" onClick={handleTelegram} disabled={loading} type="button">
+            <div className="auth-social-ico tg">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" />
+            </div>
+            Telegram
+            <span className="soc-chevron">›</span>
+          </button>
+
           <GoogleButton
             onSuccess={handleGoogleSuccess}
-            onError={(msg) => setError(msg)}
+            onError={msg => setError(msg)}
             disabled={loading}
-            label="Register with Google"
+            label="Google"
+            renderAs="row"
           />
-
-          <button className="auth-social-btn telegram" onClick={handleTelegram} disabled={loading}>
-            <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" />
-            Register with Telegram
-          </button>
 
           <WalletButton
             role={form.role}
             isRegister={true}
-            onSuccess={(role) => redirect(role)}
-            onError={(msg) => setError(msg)}
-            onUsernameRequired={(address) => setUsernameModal({ provider: 'wallet', data: { address } })}
+            onSuccess={role => redirect(role)}
+            onError={msg => setError(msg)}
+            onUsernameRequired={address => setUsernameModal({ provider: 'wallet', data: { address } })}
             disabled={loading}
+            renderAs="row"
           />
         </div>
 
-        <p className="auth-footer">
-          Already registered? <Link to="/login">Sign in</Link>
+        <p className="auth-footer-link">
+          Already have an account? <Link to="/login">Sign in</Link>
         </p>
       </div>
     </div>

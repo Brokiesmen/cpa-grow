@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart3 } from 'lucide-react'
 import api from '../../api/client'
 
 const fmtDate = s => new Date(s).toLocaleDateString('en', { month: 'short', day: 'numeric' })
+
+const Tip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border-2)', borderRadius: 10, padding: '10px 14px', fontSize: 12, boxShadow: 'var(--shadow-md)' }}>
+      <div style={{ fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>{label}</div>
+      {payload.map(p => (
+        <div key={p.name} style={{ color: p.color, display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
+          {p.name}: <strong>{p.name === 'revenue' ? '$' + Number(p.value).toFixed(2) : p.value}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function PublisherStats() {
   const [data, setData] = useState([])
@@ -16,7 +32,6 @@ export default function PublisherStats() {
       .then(r => {
         const rows = r.data || []
         if (rows.length === 0) {
-          // Generate demo data
           setData(Array.from({ length: range }, (_, i) => {
             const d = new Date(); d.setDate(d.getDate() - (range - 1 - i))
             const clicks = Math.round(60 + Math.random() * 150)
@@ -39,37 +54,28 @@ export default function PublisherStats() {
   const avgCr = totals.clicks > 0 ? (totals.conversions / totals.clicks * 100).toFixed(2) : '0.00'
   const avgEpc = totals.clicks > 0 ? (totals.revenue / totals.clicks).toFixed(3) : '0.000'
 
-  const Tip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null
-    return (
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
-        <div style={{ fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>{label}</div>
-        {payload.map(p => (
-          <div key={p.name} style={{ color: p.color }}>
-            {p.name}: <strong>{p.name === 'revenue' ? '$' + Number(p.value).toFixed(2) : p.value}</strong>
-          </div>
-        ))}
-      </div>
-    )
-  }
+  const RANGES = [7, 14, 30, 90]
 
   return (
-    <div>
-      <div className="flex items-center justify-between" style={{ marginBottom: 24 }}>
+    <div className="page">
+      <div className="page-header">
         <div>
           <div className="page-title">Statistics</div>
           <div className="page-subtitle">Your performance analytics</div>
         </div>
-        <div className="flex gap-2">
-          {[7, 14, 30, 90].map(d => (
-            <button key={d} className={`btn ${range === d ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => setRange(d)}>{d}d</button>
+        <div className="page-header-actions">
+          {RANGES.map(d => (
+            <button key={d}
+              className={`btn ${range === d ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => setRange(d)}>{d}d
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Summary row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}>
+      {/* Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}
+           className="stats-summary-grid stagger">
         {[
           { l: 'Clicks',      v: totals.clicks.toLocaleString() },
           { l: 'Conversions', v: totals.conversions.toLocaleString() },
@@ -77,8 +83,8 @@ export default function PublisherStats() {
           { l: 'CR',          v: avgCr + '%' },
           { l: 'EPC',         v: '$' + avgEpc },
         ].map(s => (
-          <div key={s.l} className="card" style={{ padding: '16px 20px' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>{s.l}</div>
+          <div key={s.l} className="card stat-card" style={{ padding: '14px 18px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 8 }}>{s.l}</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>{s.v}</div>
           </div>
         ))}
@@ -87,15 +93,19 @@ export default function PublisherStats() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60 }}><div className="spinner" /></div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card">
-            <div className="card-header">Revenue</div>
+            <div className="card-header">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <BarChart3 size={15} style={{ color: 'var(--accent)' }} /> Revenue
+              </span>
+            </div>
             <div className="card-body">
               <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={data}>
                   <defs>
                     <linearGradient id="rev2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.15} />
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.18} />
                       <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -104,7 +114,7 @@ export default function PublisherStats() {
                     interval={Math.floor(data.length / 8)} />
                   <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                   <Tooltip content={<Tip />} />
-                  <Area type="monotone" dataKey="revenue" stroke="var(--accent)" strokeWidth={2} fill="url(#rev2)" dot={false} />
+                  <Area type="monotone" dataKey="revenue" stroke="var(--accent)" strokeWidth={2.5} fill="url(#rev2)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -121,7 +131,7 @@ export default function PublisherStats() {
                       interval={Math.floor(data.length / 6)} />
                     <YAxis tick={{ fontSize: 10, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                     <Tooltip content={<Tip />} />
-                    <Bar dataKey="clicks" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="clicks" fill="var(--accent)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -136,7 +146,7 @@ export default function PublisherStats() {
                       interval={Math.floor(data.length / 6)} />
                     <YAxis tick={{ fontSize: 10, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                     <Tooltip content={<Tip />} />
-                    <Bar dataKey="conversions" fill="var(--green)" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="conversions" fill="var(--green)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

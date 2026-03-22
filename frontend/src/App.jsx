@@ -20,6 +20,17 @@ import PublisherStats from './pages/publisher/Stats'
 import AdvertiserDashboard from './pages/advertiser/Dashboard'
 import AdvertiserDisputes from './pages/advertiser/Disputes'
 import AdvertiserSandbox from './pages/advertiser/Sandbox'
+import AdvertiserSettings from './pages/advertiser/Settings'
+
+// Publisher (settings)
+import PublisherSettings from './pages/publisher/Settings'
+
+// Admin
+import AdminDashboard from './pages/admin/Dashboard'
+import AdminUsers from './pages/admin/Users'
+import AdminUserDetail from './pages/admin/UserDetail'
+import AdminOffers from './pages/admin/Offers'
+import AdminPayouts from './pages/admin/Payouts'
 
 class ErrorBoundary extends Component {
   state = { error: null }
@@ -76,11 +87,20 @@ export default function App() {
               <Route path="/publisher/disputes" element={<PrivateRoute role="PUBLISHER"><PublisherDisputes /></PrivateRoute>} />
               <Route path="/publisher/balance" element={<PrivateRoute role="PUBLISHER"><PublisherBalance /></PrivateRoute>} />
               <Route path="/publisher/stats" element={<PrivateRoute role="PUBLISHER"><PublisherStats /></PrivateRoute>} />
+              <Route path="/publisher/settings" element={<PrivateRoute role="PUBLISHER"><PublisherSettings /></PrivateRoute>} />
 
               {/* Advertiser */}
               <Route path="/advertiser" element={<PrivateRoute role="ADVERTISER"><AdvertiserDashboard /></PrivateRoute>} />
               <Route path="/advertiser/disputes" element={<PrivateRoute role="ADVERTISER"><AdvertiserDisputes /></PrivateRoute>} />
               <Route path="/advertiser/sandbox" element={<PrivateRoute role="ADVERTISER"><AdvertiserSandbox /></PrivateRoute>} />
+              <Route path="/advertiser/settings" element={<PrivateRoute role="ADVERTISER"><AdvertiserSettings /></PrivateRoute>} />
+
+              {/* Admin */}
+              <Route path="/admin" element={<PrivateRoute role="ADMIN"><AdminDashboard /></PrivateRoute>} />
+              <Route path="/admin/users" element={<PrivateRoute role="ADMIN"><AdminUsers /></PrivateRoute>} />
+              <Route path="/admin/users/:id" element={<PrivateRoute role="ADMIN"><AdminUserDetail /></PrivateRoute>} />
+              <Route path="/admin/offers" element={<PrivateRoute role="ADMIN"><AdminOffers /></PrivateRoute>} />
+              <Route path="/admin/payouts" element={<PrivateRoute role="ADMIN"><AdminPayouts /></PrivateRoute>} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

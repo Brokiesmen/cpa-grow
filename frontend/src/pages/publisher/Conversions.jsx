@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ArrowLeftRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../../api/client'
 import Badge from '../../components/Badge'
 import { useToast } from '../../components/Toast'
@@ -20,19 +21,23 @@ export default function PublisherConversions() {
       .finally(() => setLoading(false))
   }, [page])
 
+  const totalPages = Math.ceil((meta.total || 0) / 30)
+
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <div className="page-title">Conversions</div>
-        <div className="page-subtitle">All your conversion history</div>
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <div className="page-title">Conversions</div>
+          <div className="page-subtitle">All your conversion history</div>
+        </div>
       </div>
 
       <div className="card">
         {loading ? (
-          <div style={{ padding: 40, textAlign: 'center' }}><div className="spinner" /></div>
+          <div style={{ padding: 48, textAlign: 'center' }}><div className="spinner" /></div>
         ) : rows.length === 0 ? (
           <div className="empty">
-            <div className="empty-icon">↯</div>
+            <ArrowLeftRight size={32} style={{ opacity: .3, marginBottom: 10 }} />
             <p>No conversions yet. Apply to offers and start sending traffic!</p>
           </div>
         ) : (
@@ -81,11 +86,15 @@ export default function PublisherConversions() {
         )}
       </div>
 
-      {meta.total > 30 && (
-        <div className="flex gap-2 mt-4 items-center" style={{ justifyContent: 'center' }}>
-          <button className="btn btn-secondary btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Page {page} of {Math.ceil(meta.total / 30)}</span>
-          <button className="btn btn-secondary btn-sm" disabled={page >= Math.ceil(meta.total / 30)} onClick={() => setPage(p => p + 1)}>Next →</button>
+      {totalPages > 1 && (
+        <div className="pagination">
+          <button className="btn btn-secondary btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            <ChevronLeft size={14} /> Prev
+          </button>
+          <span className="pagination-info">Page {page} of {totalPages}</span>
+          <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+            Next <ChevronRight size={14} />
+          </button>
         </div>
       )}
     </div>

@@ -8,21 +8,51 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // При загрузке пробуем восстановить сессию через refreshToken cookie
+  // Restore session on mount via httpOnly refreshToken cookie
   useEffect(() => {
     axios.post('/api/auth/refresh', {}, { withCredentials: true })
       .then(({ data }) => {
         setAccessToken(data.access_token)
-        return api.get('/auth/me')
+        setUser(data.user ?? null)
       })
-      .then(r => setUser(r.data))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
+  // Listen for token expiry / silent refresh events from the axios client
+  useEffect(() => {
+    const onExpired = () => setUser(null)
+    const onRefreshed = e => { if (e.detail) setUser(e.detail) }
+    window.addEventListener('auth:expired', onExpired)
+    window.addEventListener('auth:refreshed', onRefreshed)
+    return () => {
+      window.removeEventListener('auth:expired', onExpired)
+      window.removeEventListener('auth:refreshed', onRefreshed)
+    }
+  }, [])
+
+  /**
+   * Email/password login — returns user profile from the response directly.
+   * No extra /auth/me call needed.
+   */
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password })
     setAccessToken(data.access_token)
+    setUser(data.user)
+    return data.user
+  }
+
+  /**
+   * OAuth login (Google, Telegram, Web3) — same pattern, user is in the response.
+   * Falls back to /auth/me if user is not in the response (legacy compatibility).
+   */
+  const loginWithToken = async (token, userFromResponse = null) => {
+    setAccessToken(token)
+    if (userFromResponse) {
+      setUser(userFromResponse)
+      return userFromResponse
+    }
+    // Fallback: fetch profile
     const me = await api.get('/auth/me')
     setUser(me.data)
     return me.data
@@ -35,7 +65,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout }}>
+    <AuthCtx.Provider value={{ user, loading, login, loginWithToken, logout }}>
       {children}
     </AuthCtx.Provider>
   )

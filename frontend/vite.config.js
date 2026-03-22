@@ -7,7 +7,15 @@ export default defineConfig({
     port: 5173,
     allowedHosts: true,
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('ngrok-skip-browser-warning', 'true')
+          })
+        }
+      },
       '/go': 'http://localhost:3000',
       '/ws': { target: 'ws://localhost:3000', ws: true }
     }

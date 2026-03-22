@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Plus, X, Wallet, FileText } from 'lucide-react'
 import api from '../../api/client'
 import { useToast } from '../../components/Toast'
 import Badge from '../../components/Badge'
@@ -15,7 +16,6 @@ const METHODS = [
 
 export default function PublisherBalance() {
   const [balances, setBalances] = useState([])
-  const [txs, setTxs] = useState([])
   const [payouts, setPayouts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -26,10 +26,7 @@ export default function PublisherBalance() {
   const load = async () => {
     setLoading(true)
     try {
-      const [b, t] = await Promise.all([
-        api.get('/v1/balance'),
-        api.get('/v1/balance').catch(() => ({ data: [] }))
-      ])
+      const b = await api.get('/v1/balance')
       setBalances(b.data || [])
     } catch {}
     setLoading(false)
@@ -51,11 +48,12 @@ export default function PublisherBalance() {
       })
       toast('Payout requested!', 'success')
       setShowForm(false)
+      setForm({ currency: 'USD', amount: '', method: 'USDT_TRC20', address: '' })
       load()
     } catch (err) {
       const e = err.response?.data?.error
       if (e === 'INSUFFICIENT_BALANCE') toast('Insufficient balance', 'error')
-      else if (e === 'BELOW_MINIMUM') toast('Below minimum payout amount', 'error')
+      else if (e === 'BELOW_MINIMUM') toast('Below minimum payout amount ($50)', 'error')
       else toast('Failed to request payout', 'error')
     } finally {
       setSubmitting(false)
@@ -66,33 +64,35 @@ export default function PublisherBalance() {
   const available = usd?.available || 0
 
   return (
-    <div>
-      <div className="flex items-center justify-between" style={{ marginBottom: 24 }}>
+    <div className="page">
+      <div className="page-header">
         <div>
           <div className="page-title">Balance & Payouts</div>
           <div className="page-subtitle">Your earnings and withdrawal history</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(s => !s)}>
-          + Request Payout
-        </button>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(s => !s)}>
+            {showForm ? <><X size={15} /> Cancel</> : <><Plus size={15} /> Request Payout</>}
+          </button>
+        </div>
       </div>
 
       {/* Balance cards */}
-      <div className="flex gap-4" style={{ marginBottom: 24, flexWrap: 'wrap' }}>
+      <div className="flex gap-3" style={{ marginBottom: 20, flexWrap: 'wrap' }}>
         {loading ? <div className="spinner" /> : balances.length === 0 ? (
-          <div className="card" style={{ padding: '20px 28px', color: 'var(--text-2)', fontSize: 13 }}>
+          <div className="card" style={{ padding: '18px 24px', color: 'var(--text-2)', fontSize: 13 }}>
             No balance data yet. Start earning from conversions!
           </div>
         ) : balances.map(b => (
-          <div key={b.currency} className="card" style={{ padding: '20px 28px', minWidth: 180 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
-              {b.currency}
+          <div key={b.currency} className="card stat-card" style={{ padding: '18px 24px', minWidth: 160, flex: '1 1 160px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Wallet size={12} /> {b.currency}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>
+            <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1 }}>
               {b.currency === 'USD' || b.currency === 'EUR' ? '$' : ''}{Number(b.available).toFixed(2)}
             </div>
             {b.hold > 0 && (
-              <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
                 + ${Number(b.hold).toFixed(2)} on hold
               </div>
             )}
@@ -102,10 +102,14 @@ export default function PublisherBalance() {
 
       {/* Payout form */}
       {showForm && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">New Payout Request</div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <Plus size={15} style={{ color: 'var(--accent)' }} /> New Payout Request
+            </span>
+          </div>
           <div className="card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }} className="payout-form-grid">
               <div className="form-group">
                 <label className="form-label">Currency</label>
                 <select className="form-input form-select" value={form.currency} onChange={set('currency')}>
@@ -117,7 +121,7 @@ export default function PublisherBalance() {
               <div className="form-group">
                 <label className="form-label">Amount</label>
                 <input className="form-input" type="number" value={form.amount}
-                  onChange={set('amount')} placeholder={`Min $50, Available: $${available.toFixed(2)}`} />
+                  onChange={set('amount')} placeholder={`Min $50 · Available: $${available.toFixed(2)}`} />
               </div>
               <div className="form-group">
                 <label className="form-label">Method</label>
@@ -131,33 +135,34 @@ export default function PublisherBalance() {
               <input className="form-input" value={form.address}
                 onChange={set('address')} placeholder="TRC20 address, bank details, etc." />
             </div>
-            <div className="flex gap-3">
-              <button className="btn btn-primary" onClick={requestPayout} disabled={submitting}>
-                {submitting ? <span className="spinner" /> : 'Submit Request'}
+            <div className="flex gap-3 flex-mobile-wrap">
+              <button className="btn btn-primary" onClick={requestPayout} disabled={submitting} style={{ flex: '1 1 auto' }}>
+                {submitting ? <span className="spinner" style={{ width: 15, height: 15 }} /> : 'Submit Request'}
               </button>
-              <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => setShowForm(false)} style={{ flex: '1 1 auto' }}>
+                <X size={14} /> Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TQS Card */}
       <div className="grid-2">
         <div className="card">
-          <div className="card-header">Your API Key</div>
+          <div className="card-header">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <FileText size={14} style={{ color: 'var(--text-3)' }} /> Your API Key
+            </span>
+          </div>
           <div className="card-body">
             <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 8 }}>
               Use this key to access the public Offer Feed API
             </div>
             <div style={{
-              fontFamily: 'monospace',
-              fontSize: 13,
-              background: 'var(--bg)',
-              padding: '10px 14px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              color: 'var(--text)',
-              wordBreak: 'break-all'
+              fontFamily: 'monospace', fontSize: 12,
+              background: 'var(--bg)', padding: '10px 14px',
+              borderRadius: 9, border: '1px solid var(--border)',
+              color: 'var(--text)', wordBreak: 'break-all', lineHeight: 1.6,
             }}>
               {localStorage.getItem('access_token')?.slice(0, 40) || '—'}...
             </div>
@@ -166,12 +171,12 @@ export default function PublisherBalance() {
 
         <div className="card">
           <div className="card-header">Payout History</div>
-          <div style={{ padding: '0' }}>
-            {payouts.length === 0 ? (
-              <div className="empty" style={{ padding: '24px 0' }}>
-                <p>No payouts yet</p>
-              </div>
-            ) : (
+          {payouts.length === 0 ? (
+            <div className="empty" style={{ padding: '24px 0' }}>
+              <p>No payouts yet</p>
+            </div>
+          ) : (
+            <div className="table-wrap">
               <table>
                 <thead>
                   <tr><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr>
@@ -187,8 +192,8 @@ export default function PublisherBalance() {
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
