@@ -56,18 +56,14 @@ function MonoField({ value, actions }) {
 export default function PublisherSettings() {
   const toast = useToast()
   const { logout } = useAuth()
-  const { isTelegramApp, tg } = useTelegram()
+  const { isTelegramApp } = useTelegram()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
 
   const handleLogout = async () => {
     await logout()
-    if (isTelegramApp && tg) {
-      tg.close()
-    } else {
-      navigate('/login')
-    }
+    navigate('/login')
   }
 
   // Profile form
@@ -551,7 +547,7 @@ export default function PublisherSettings() {
             <div>
               <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 14 }}>Sign Out</div>
               <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
-                {isTelegramApp ? 'Close the app and end your session' : 'End your current session'}
+                End your current session
               </div>
             </div>
             <button className="btn btn-danger" onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
