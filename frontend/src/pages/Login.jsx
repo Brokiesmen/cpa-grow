@@ -28,7 +28,7 @@ function TelegramOnboarding({ tgUser, initData, onSuccess, onError }) {
         role,
         username: role === 'PUBLISHER' ? username.trim() : undefined,
       })
-      const user = await loginWithToken(data.access_token, data.user)
+      const user = await loginWithToken(data.access_token, data.user, data)
       onSuccess(user.role)
     } catch (err) {
       const code = err.response?.data?.error
@@ -143,7 +143,7 @@ export default function Login() {
     setError('')
     try {
       const { data } = await api.post('/auth/google', { idToken: token })
-      const user = await loginWithToken(data.access_token, data.user)
+      const user = await loginWithToken(data.access_token, data.user, data)
       redirect(user.role)
     } catch (err) {
       const code = err.response?.data?.error
@@ -166,7 +166,7 @@ export default function Login() {
         if (data.is_new_user) {
           setTgNewUser(data.tg_user)
         } else {
-          const user = await loginWithToken(data.access_token, data.user)
+          const user = await loginWithToken(data.access_token, data.user, data)
           redirect(user.role)
         }
       } catch (err) {
@@ -188,7 +188,7 @@ export default function Login() {
       setError('')
       try {
         const res = await api.post('/auth/telegram', data)
-        const user = await loginWithToken(res.data.access_token, res.data.user)
+        const user = await loginWithToken(res.data.access_token, res.data.user, res.data)
         redirect(user.role)
       } catch (err) {
         setError(err.response?.data?.message || 'Telegram login failed')

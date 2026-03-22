@@ -94,8 +94,9 @@ export default async function authRoutes(fastify) {
   })
 
   // ── Refresh token (with rotation) ────────────
+  // Accepts token from: 1) httpOnly cookie, 2) request body (for Telegram CloudStorage)
   fastify.post('/refresh', async (req, reply) => {
-    const rawToken = req.cookies?.refreshToken
+    const rawToken = req.cookies?.refreshToken || req.body?.refreshToken
     if (!rawToken) return reply.code(401).send({ error: 'INVALID_REFRESH_TOKEN' })
 
     const hashedToken = hashToken(rawToken)
@@ -139,12 +140,12 @@ export default async function authRoutes(fastify) {
     }).catch(() => {})
 
     const profile = await getUserProfile(prisma, session.user.id)
-    return { access_token: accessToken, expires_in: 900, user: profile }
+    return { access_token: accessToken, refresh_token: newRawToken, expires_in: 900, user: profile }
   })
 
   // ── Logout ────────────────────────────────────
   fastify.post('/logout', { onRequest: [fastify.authenticate] }, async (req, reply) => {
-    const rawToken = req.cookies?.refreshToken
+    const rawToken = req.cookies?.refreshToken || req.body?.refreshToken
     if (rawToken) {
       await prisma.session.deleteMany({ where: { token: hashToken(rawToken) } })
     }

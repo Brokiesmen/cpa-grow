@@ -87,6 +87,7 @@ export async function buildAuthResponse(fastify, prisma, user, reply, ip, userAg
 
   return {
     access_token: accessToken,
+    refresh_token: rawRefreshToken, // returned in body for Telegram CloudStorage
     expires_in: 900,
     user: profile
   }

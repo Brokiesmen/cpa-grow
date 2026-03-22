@@ -57,7 +57,7 @@ export default function Register() {
         res = await api.post('/auth/telegram', { ...data, role: form.role, username: modalUsername })
       }
       if (res?.data?.access_token) {
-        const user = await loginWithToken(res.data.access_token, res.data.user)
+        const user = await loginWithToken(res.data.access_token, res.data.user, res.data)
         redirect(user.role)
       }
     } catch (err) {
@@ -72,7 +72,7 @@ export default function Register() {
     setError('')
     try {
       const res = await api.post('/auth/google', { idToken: accessToken, role: form.role })
-      const user = await loginWithToken(res.data.access_token, res.data.user)
+      const user = await loginWithToken(res.data.access_token, res.data.user, res.data)
       redirect(user.role)
     } catch (err) {
       if (err.response?.data?.error === 'USERNAME_REQUIRED') {
@@ -95,7 +95,7 @@ export default function Register() {
       setError('')
       try {
         const res = await api.post('/auth/telegram', { ...data, role: form.role })
-        const user = await loginWithToken(res.data.access_token, res.data.user)
+        const user = await loginWithToken(res.data.access_token, res.data.user, res.data)
         redirect(user.role)
       } catch (err) {
         if (err.response?.data?.error === 'USERNAME_REQUIRED') {
